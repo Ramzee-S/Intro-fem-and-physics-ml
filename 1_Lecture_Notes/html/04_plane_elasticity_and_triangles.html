@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plane Elasticity, Triangle and Quad Elements — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="03_trusses_in_the_plane.html">← Lecture 3</a> <a href="05_mass_damping_and_time.html">Lecture 5 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture 4</p>
+<h1>Plane Elasticity, Triangle and Quad Elements</h1>
+<p>Now the payoff lecture. We want to compute a genuinely two-dimensional solid: a thin sheet of material, loaded in its plane — a bracket, a plate with a hole, a dam cross-section. No arrangement of springs will get us there, and drawing-based intuition is out of its depth. But the Lecture 2 program was built for exactly this trip: we repeat its steps, one by one, on the new physics, and they will hand us a working element.</p>
+<h2 id="sec:plane3steps">4.1   The same three steps, in the plane</h2>
+<p>The actors, now on a two-dimensional stage <span class="math inline">\(\Omega\)</span> (a region of the <span class="math inline">\(x\)</span>-<span class="math inline">\(y\)</span> plane, representing a sheet of constant thickness <span class="math inline">\(t\)</span>): displacements, strains, stresses, loads — each simply grew more components. (In 1D we told the three statements balance-first; the order is free, and this time we follow the chain <span class="math inline">\(u \to \boldsymbol{\varepsilon}\to \boldsymbol{\sigma }\to\)</span> balance, since each quantity sets the stage for the next.)</p>
+<h5 id="i-kinematics.">(i) Kinematics.</h5>
+<p>The displacement is a vector field: every point moves by <span class="math inline">\(u(x,y)\)</span> in <span class="math inline">\(x\)</span> and <span class="math inline">\(v(x,y)\)</span> in <span class="math inline">\(y\)</span>. Strain now has three components: stretching in <span class="math inline">\(x\)</span>, stretching in <span class="math inline">\(y\)</span>, and the change of the right angle between the <span class="math inline">\(x\)</span> and <span class="math inline">\(y\)</span> directions (<em>shear</em>): <span id="eq:kin2d"></span><span class="math display">\[\varepsilon_x = \frac{\partial u}{\partial x}, \qquad
+  \varepsilon_y = \frac{\partial v}{\partial y}, \qquad
+  \gamma_{xy} = \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x}.
+  
+\tag{4.1}\]</span> Each is the 2D cousin of <span class="math inline">\(\varepsilon= \mathrm{d}u/\mathrm{d}x\)</span>: pure geometry, obtained by watching how neighboring points displace relative to each other. We collect them in a vector <span class="math inline">\(\boldsymbol{\varepsilon}= [\varepsilon_x,\ \varepsilon_y,\ \gamma_{xy}]^{\mathsf{T}}\)</span> — bookkeeping, nothing more.</p>
+<h5 id="ii-material-law.">(ii) Material law.</h5>
+<p>Stress likewise has three components <span class="math inline">\(\boldsymbol{\sigma }= [\sigma_x,\ \sigma_y,\ \tau_{xy}]^{\mathsf{T}}\)</span>, and Hooke’s law becomes a small matrix. For a thin sheet free to contract in thickness (<em>plane stress</em> — the standard assumption for sheet-like parts): <span id="eq:D"></span><span class="math display">\[\boldsymbol{\sigma }= \mathbf{D}\,\boldsymbol{\varepsilon},
+  \qquad
+  \mathbf{D} = \frac{E}{1-\nu^2}
+  \begin{bmatrix} 1 &amp; \nu &amp; 0\\ \nu &amp; 1 &amp; 0\\ 0 &amp; 0 &amp; \frac{1-\nu}{2}\end{bmatrix},
+  
+\tag{4.2}\]</span> with Young’s modulus <span class="math inline">\(E\)</span> and Poisson’s ratio <span class="math inline">\(\nu\)</span> (sideways contraction; steel <span class="math inline">\(\approx0.3\)</span>). <span class="math inline">\(\mathbf{D}\)</span> is the 2D replacement for the scalar <span class="math inline">\(E\)</span> — symmetric, as a material stiffness must be. Its third diagonal entry, <span class="math inline">\(\frac{E}{1-\nu^2}\cdot\frac{1-\nu}{2} = \frac{E}{2(1+\nu)} = G\)</span>, is the <em>shear modulus</em>: <span class="math inline">\(\tau_{xy} = G\,\gamma_{xy}\)</span>. With <span class="math inline">\(\nu=0\)</span> the off-diagonal entries vanish and <span class="math inline">\(x\)</span> and <span class="math inline">\(y\)</span> decouple. (The sibling assumption <em>plane strain</em>, for long prismatic bodies like dams, only changes the entries of <span class="math inline">\(\mathbf{D}\)</span>, to <span class="math inline">\(\frac{E}{(1+\nu)(1-2\nu)}\bigl[\begin{smallmatrix}1-\nu&amp;\nu&amp;0\\ \nu&amp;1-\nu&amp;0\\ 0&amp;0&amp;(1-2\nu)/2\end{smallmatrix}\bigr]\)</span>; nothing downstream is affected.)</p>
+<h5 id="iii-equilibrium.">(iii) Equilibrium.</h5>
+<p>Balancing forces on a small rectangle <span class="math inline">\(\mathrm{d}x\times \mathrm{d}y\)</span> (the 2D version of Fig. <a href="02_boundary_value_problem.html#fig:slice">2.1</a>, with stresses acting on all four edges and a body force <span class="math inline">\(\mathbf{b} = [b_x, b_y]^{\mathsf{T}}\)</span> per unit volume, e.g. self-weight <span class="math inline">\(\rho g\)</span>) gives one equation per direction: <span id="eq:equil2d"></span><span class="math display">\[\frac{\partial \sigma_x}{\partial x} + \frac{\partial \tau_{xy}}{\partial y} + b_x = 0,
+  \qquad
+  \frac{\partial \tau_{xy}}{\partial x} + \frac{\partial \sigma_y}{\partial y} + b_y = 0
+  \qquad\text{in } \Omega.
+  
+\tag{4.3}\]</span></p>
+<p>Chaining (i)<span class="math inline">\(\to\)</span>(ii)<span class="math inline">\(\to\)</span>(iii) produces a system of partial differential equations in <span class="math inline">\(u\)</span> and <span class="math inline">\(v\)</span> — the 2D strong form. The boundary conditions follow the same conjugate-pair logic as always, now along the boundary <em>curve</em> <span class="math inline">\(\Gamma\)</span>: on each part of <span class="math inline">\(\Gamma\)</span>, per direction, either the displacement is prescribed (essential) or the surface traction — force per edge area — is prescribed (natural), with free edges being the homogeneous natural case <span class="math inline">\(\bar{\mathbf{t}}=\mathbf{0}\)</span>.</p>
+<p>So far, so familiar: Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a> applies verbatim with <span class="math inline">\(u\mapsto(u,v)\)</span>, <span class="math inline">\(\varepsilon\mapsto\boldsymbol{\varepsilon}\)</span>, <span class="math inline">\(N\mapsto\boldsymbol{\sigma}\)</span>, <span class="math inline">\(EA\mapsto t\,\mathbf{D}\)</span>, <span class="math inline">\(n\mapsto\mathbf{b}\)</span>. There is just one brutal practical difference: <em>this strong form has no hand-solvable solution except for a few textbook geometries</em>. In 1D we integrated twice and smiled; on a bracket-shaped <span class="math inline">\(\Omega\)</span> nobody integrates anything. The weak form is no longer a nicety — it is the only road open.</p>
+<h2 id="sec:planeenergy">4.2   Weak form and energy, in one breath</h2>
+<p>We could repeat the weighted-residual/integration-by-parts derivation of Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a> component by component (the 2D integration by parts is called the divergence theorem, and it again converts the natural boundary condition into a right-hand-side term). But Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a> taught us that for elastic problems the result <em>is</em> the minimum of the potential energy, so we go straight there: <span id="eq:Pi2d"></span><span class="math display">\[\Pi(u,v) =
+  \underbrace{\tfrac12 \int_\Omega \boldsymbol{\varepsilon}^{\mathsf{T}}\mathbf{D}\,\boldsymbol{\varepsilon}\; t\,\mathrm{d}A}_{\text{stored elastic energy}}
+  \;-\;
+  \underbrace{\int_\Omega \mathbf{u}^{\mathsf{T}}\mathbf{b}\; t \,\mathrm{d}A
+  \;+\; \text{(work of boundary tractions and point loads)}}_{\text{work of loads}} ,
+  
+\tag{4.4}\]</span> with <span class="math inline">\(\mathbf{u} = [u,\ v]^{\mathsf{T}}\)</span>. Minimize over all displacement fields satisfying the essential boundary conditions, and you have the 2D problem statement. Note it contains only <em>first</em> derivatives of <span class="math inline">\(u,v\)</span> (inside <span class="math inline">\(\boldsymbol{\varepsilon}\)</span>): piecewise-linear fields over a mesh are admissible. Everything is in place for shape functions.</p>
+<h2 id="the-linear-triangle-cst">4.3   The linear triangle (CST)</h2>
+<p>Cover <span class="math inline">\(\Omega\)</span> with triangles — the great advantage of triangles being that they can tile <em>any</em> polygonal shape, holes and all. On this mesh, define one hat function <span class="math inline">\(N_i(x,y)\)</span> per node exactly as in 1D: a “tent” with value <span class="math inline">\(1\)</span> at node <span class="math inline">\(i\)</span>, sloping linearly to <span class="math inline">\(0\)</span> at the neighboring nodes, zero beyond. Both displacement components get the same treatment: <span class="math display">\[\tilde u(x,y) = \sum_i N_i(x,y)\, u_i,
+  \qquad
+  \tilde v(x,y) = \sum_i N_i(x,y)\, v_i .\]</span> As before, all integrals split over elements, so we only need to study <em>one triangle</em> with nodes <span class="math inline">\(1,2,3\)</span> at <span class="math inline">\((x_1,y_1),(x_2,y_2),(x_3,y_3)\)</span> (numbered counterclockwise) and its six nodal DOFs <span class="math inline">\(\mathbf{d} = [u_1, v_1, u_2, v_2, u_3, v_3]^{\mathsf{T}}\)</span> (Fig. <a href="04_plane_elasticity_and_triangles.html#fig:cst">4.1</a>).</p>
+<figure id="fig:cst">
+<img src="figs/04_fig1.svg" style="width:282px" alt="" />
+<figcaption><strong>Figure 4.1.</strong> The linear triangle: three nodes, six DOFs, area <span class="math inline">\(A\)</span>, thickness <span class="math inline">\(t\)</span>.</figcaption>
+</figure>
+<h5 id="shape-functions.">Shape functions.</h5>
+<p>On one triangle, <span class="math inline">\(N_i\)</span> is the unique linear function <span class="math inline">\(N_i = (a_i + b_i x + c_i y)/(2A)\)</span>, where <span class="math inline">\(A\)</span> is the triangle’s area, with <span class="math inline">\(N_i=1\)</span> at node <span class="math inline">\(i\)</span> and <span class="math inline">\(0\)</span> at the other two. Solving these three little conditions gives, with <span class="math inline">\((i,j,k)\)</span> cyclic, i.e. <span class="math inline">\((1,2,3)\)</span>, <span class="math inline">\((2,3,1)\)</span> or <span class="math inline">\((3,1,2)\)</span>, <span id="eq:bc-coeffs"></span><span class="math display">\[b_i = y_j - y_k, \qquad c_i = x_k - x_j,
+  \qquad
+  2A = (x_2-x_1)(y_3-y_1) - (x_3-x_1)(y_2-y_1),
+  
+\tag{4.5}\]</span> (<span class="math inline">\(a_i\)</span> drops out of everything that follows, since we will only need derivatives; counterclockwise numbering makes <span class="math inline">\(A\)</span> positive, clockwise numbering would make it negative). Before trusting formulas, make them concrete on the simplest possible triangle — nodes at <span class="math inline">\((0,0)\)</span>, <span class="math inline">\((1,0)\)</span>, <span class="math inline">\((0,1)\)</span>: <span class="math display">\[N_1 = 1 - x - y, \qquad N_2 = x, \qquad N_3 = y .\]</span> Check the Kronecker property at all three corners; check <span class="math inline">\(N_1+N_2+N_3=1\)</span> everywhere (the <em>partition of unity</em>). These are the hats of Fig. <a href="02_boundary_value_problem.html#fig:hats">2.5</a> grown a second leg.</p>
+<h5 id="the-b-matrix.">The B matrix.</h5>
+<p>Strains come from derivatives <a href="04_plane_elasticity_and_triangles.html#eq:kin2d">(4.1)</a>. Since each <span class="math inline">\(N_i\)</span> is linear, its derivatives are the <em>constants</em> <span class="math inline">\(\partial N_i/\partial x = b_i/2A\)</span> and <span class="math inline">\(\partial N_i/\partial y = c_i/2A\)</span>. Organizing <span class="math inline">\(\boldsymbol{\varepsilon}= \mathbf{B}\,\mathbf{d}\)</span> exactly as in 1D: <span id="eq:Bcst"></span><span class="math display">\[\mathbf{B} = \frac{1}{2A}
+  \begin{bmatrix}
+    b_1 &amp; 0 &amp; b_2 &amp; 0 &amp; b_3 &amp; 0\\
+    0 &amp; c_1 &amp; 0 &amp; c_2 &amp; 0 &amp; c_3\\
+    c_1 &amp; b_1 &amp; c_2 &amp; b_2 &amp; c_3 &amp; b_3
+  \end{bmatrix}
+  \qquad (3\times 6).
+  
+\tag{4.6}\]</span> (Row 1 is <span class="math inline">\(\varepsilon_x=\partial\tilde u/\partial x\)</span>: only <span class="math inline">\(u\)</span>-DOFs, only <span class="math inline">\(x\)</span>-derivatives. Row 2 likewise for <span class="math inline">\(\varepsilon_y\)</span>. Row 3 mixes, because shear does.) <span class="math inline">\(\mathbf{B}\)</span> is constant over the triangle: <em>the strain — hence also the stress — is the same at every point of the element</em>. Hence the element’s name: <strong>constant strain triangle</strong> (CST). This is the element’s built-in assumption, worth stating plainly: CST can represent any state of <em>uniform</em> strain exactly, and approximates varying strain fields as patchwork of constant pieces — crude but honest, and convergent as the patches shrink.</p>
+<h5 id="stiffness-matrix.">Stiffness matrix.</h5>
+<p>Insert <span class="math inline">\(\boldsymbol{\varepsilon}= \mathbf{B} \mathbf{d}\)</span> into the energy <a href="04_plane_elasticity_and_triangles.html#eq:Pi2d">(4.4)</a> restricted to one element. Because <span class="math inline">\(\mathbf{B}\)</span> and <span class="math inline">\(\mathbf{D}\)</span> are constant, the integrand is constant and the integral is just (value)<span class="math inline">\(\times\)</span>(area): <span id="eq:kcst"></span><span class="math display">\[\tfrac12\int_{A} \mathbf{d}^{\mathsf{T}}\mathbf{B}^{\mathsf{T}}\mathbf{D}\, \mathbf{B}\, \mathbf{d}\; t\,\mathrm{d}A
+  = \tfrac12\, \mathbf{d}^{\mathsf{T}}\, \underbrace{\bigl(t\,A\; \mathbf{B}^{\mathsf{T}}\mathbf{D}\,\mathbf{B}\bigr)}_{\textstyle \mathbf{k}^e}\,\mathbf{d} ,
+  \qquad
+  \boxed{\;\mathbf{k}^e = t\,A\; \mathbf{B}^{\mathsf{T}}\mathbf{D}\, \mathbf{B}\;}
+  
+\tag{4.7}\]</span> — a <span class="math inline">\(6\times6\)</span> symmetric matrix, the two-dimensional sibling of <span class="math inline">\(\int\mathbf{B}^{\mathsf{T}}EA\,\mathbf{B}\,\mathrm{d}\xi\)</span>, computable by three matrix multiplications. No integration tables, no guessing: the Lecture 2 recipe <a href="02_boundary_value_problem.html#eq:kpattern">(2.16)</a> delivered a continuum element.</p>
+<p>Count its zero-energy modes before believing it: <span class="math inline">\(6\)</span> DOFs, <span class="math inline">\(3\)</span> independent strain components <span class="math inline">\(\Rightarrow\)</span> the rank is <span class="math inline">\(3\)</span>, leaving <span class="math inline">\(3\)</span> rigid body modes (translation in <span class="math inline">\(x\)</span>, translation in <span class="math inline">\(y\)</span>, and — new in 2D — one rotation). So at least three suitably placed DOFs must be fixed before <span class="math inline">\(\mathbf{K}_{ff}\)</span> can be inverted; the conjugate-pair rule needs no amendment.</p>
+<h2 id="sec:cst-hand">4.4   A hand-sized example</h2>
+<p>It is a special pleasure — rare in continuum mechanics — to compute a genuine 2D element by hand. We choose the numbers to keep every entry a small fraction.</p>
+<figure id="fig:csthand">
+<img src="figs/04_fig2.svg" style="width:287px" alt="" />
+<figcaption><strong>Figure 4.2.</strong> Hand example: unit right triangle, nodes 1 and 2 fully fixed, force <span class="math inline">\((F_x,F_y)\)</span> at node 3. Material <span class="math inline">\(E\)</span>, <span class="math inline">\(\nu=0\)</span>, thickness <span class="math inline">\(t\)</span>.</figcaption>
+</figure>
+<p><strong>Setup</strong> (Fig. <a href="04_plane_elasticity_and_triangles.html#fig:csthand">4.2</a>): nodes <span class="math inline">\(1\,(0,0)\)</span>, <span class="math inline">\(2\,(1,0)\)</span>, <span class="math inline">\(3\,(0,1)\)</span> (lengths in meters, if you like); thickness <span class="math inline">\(t\)</span>; material <span class="math inline">\(E\)</span> and — for clean numbers — <span class="math inline">\(\nu = 0\)</span>, which makes <span class="math inline">\(\mathbf{D} = \operatorname{diag}(E,\ E,\ E/2)\)</span>. Nothing conceptual depends on this; with <span class="math inline">\(\nu=0.3\)</span> only the fractions get uglier.</p>
+<p><strong>Step 1: geometry.</strong> <span class="math inline">\(2A = (1)(1) - (0)(0) = 1\)</span>, so <span class="math inline">\(A = \tfrac12\)</span>. From <a href="04_plane_elasticity_and_triangles.html#eq:bc-coeffs">(4.5)</a>: <span class="math display">\[\begin{aligned}
+  b_1 &amp;= y_2-y_3 = -1, &amp; b_2 &amp;= y_3-y_1 = 1, &amp; b_3 &amp;= y_1-y_2 = 0,\\
+  c_1 &amp;= x_3-x_2 = -1, &amp; c_2 &amp;= x_1-x_3 = 0, &amp; c_3 &amp;= x_2-x_1 = 1 .
+  \end{aligned}\]</span></p>
+<p><strong>Step 2: the B matrix.</strong> With <span class="math inline">\(1/(2A) = 1\)</span>, equation <a href="04_plane_elasticity_and_triangles.html#eq:Bcst">(4.6)</a> gives <span class="math display">\[\mathbf{B} =
+  \begin{bmatrix}
+   -1 &amp; 0 &amp; 1 &amp; 0 &amp; 0 &amp; 0\\
+    0 &amp; -1 &amp; 0 &amp; 0 &amp; 0 &amp; 1\\
+   -1 &amp; -1 &amp; 0 &amp; 1 &amp; 1 &amp; 0
+  \end{bmatrix}.\]</span> Read it like a sentence: “<span class="math inline">\(\varepsilon_x\)</span> is <span class="math inline">\(u_2 - u_1\)</span>; <span class="math inline">\(\varepsilon_y\)</span> is <span class="math inline">\(v_3 - v_1\)</span>; the shear collects the rest.” For this right triangle each entry is visibly a difference quotient across a unit edge.</p>
+<p><strong>Step 3: the stiffness matrix.</strong> Carry out <span class="math inline">\(\mathbf{k}^e = tA\,\mathbf{B}^{\mathsf{T}}\mathbf{D}\,\mathbf{B} = \tfrac{t}{2}\,\mathbf{B}^{\mathsf{T}}\operatorname{diag}(E,E,\tfrac{E}{2})\,\mathbf{B}\)</span>: <span id="eq:kcsthand"></span><span class="math display">\[\mathbf{k}^e = \frac{E\,t}{4}
+  \begin{bmatrix}
+   3 &amp; 1 &amp; -2 &amp; -1 &amp; -1 &amp; 0\\
+   1 &amp; 3 &amp; 0 &amp; -1 &amp; -1 &amp; -2\\
+   -2 &amp; 0 &amp; 2 &amp; 0 &amp; 0 &amp; 0\\
+   -1 &amp; -1 &amp; 0 &amp; 1 &amp; 1 &amp; 0\\
+   -1 &amp; -1 &amp; 0 &amp; 1 &amp; 1 &amp; 0\\
+   0 &amp; -2 &amp; 0 &amp; 0 &amp; 0 &amp; 2
+  \end{bmatrix}
+  \qquad
+  \begin{matrix} \leftarrow u_1\\ \leftarrow v_1\\ \leftarrow u_2\\
+  \leftarrow v_2\\ \leftarrow u_3\\ \leftarrow v_3\end{matrix}
+  
+\tag{4.8}\]</span> Pause and check its shape, size and entries:</p>
+<ul>
+<li><p><span class="math inline">\(6\times6\)</span>, symmetric, every entry a multiple of <span class="math inline">\(Et/4\)</span>;</p></li>
+<li><p>each row sums to zero over the <span class="math inline">\(u\)</span>-columns and over the <span class="math inline">\(v\)</span>-columns separately (translate the triangle rigidly in <span class="math inline">\(x\)</span> or <span class="math inline">\(y\)</span>: no forces — rigid body modes, visible to the naked eye);</p></li>
+<li><p>its eigenvalues are <span class="math inline">\(\{0,\ 0,\ 0,\ \tfrac{Et}{2},\ Et,\ \tfrac{3Et}{2}\}\)</span>: rank 3, as predicted.</p></li>
+</ul>
+<p><strong>Step 4: boundary conditions and solve.</strong> Fix nodes 1 and 2 completely, <span class="math inline">\(u_1{=}v_1{=}0\)</span> and <span class="math inline">\(u_2{=}v_2{=}0\)</span> (four constraints, more than the three needed, all legal), and load node 3 with <span class="math inline">\((F_x, F_y)\)</span>. Partitioning <a href="01_springs_and_stiffness.html#eq:solve">(1.5)</a> keeps only the lower-right <span class="math inline">\(2\times2\)</span> block of <a href="04_plane_elasticity_and_triangles.html#eq:kcsthand">(4.8)</a>: <span class="math display">\[\frac{Et}{4}
+  \begin{bmatrix} 1 &amp; 0\\ 0 &amp; 2 \end{bmatrix}
+  \begin{bmatrix} u_3\\ v_3 \end{bmatrix}
+  =
+  \begin{bmatrix} F_x\\ F_y \end{bmatrix}
+  \quad\Longrightarrow\quad
+  u_3 = \frac{4F_x}{Et}, \qquad v_3 = \frac{2F_y}{Et} .\]</span> A full continuum FEM solution, solved in one line. Note the triangle is twice as stiff vertically as horizontally — pulling up at node 3 stretches the material toward the clamped bottom edge, while pushing sideways only <em>shears</em> it, and with <span class="math inline">\(\nu = 0\)</span> the shear modulus is <span class="math inline">\(E/2\)</span>.</p>
+<p><strong>Step 5: post-processing.</strong> Strains from <span class="math inline">\(\boldsymbol{\varepsilon}= \mathbf{B}\,\mathbf{d}\)</span> with <span class="math inline">\(\mathbf{d} = [0,0,0,0,u_3,v_3]^{\mathsf{T}}\)</span>: reading columns 5 and 6 of <span class="math inline">\(\mathbf{B}\)</span>, <span class="math display">\[\varepsilon_x = 0,\qquad
+  \varepsilon_y = v_3 = \frac{2F_y}{Et},\qquad
+  \gamma_{xy} = u_3 = \frac{4F_x}{Et},\]</span> and stresses <span class="math inline">\(\boldsymbol{\sigma }= \mathbf{D}\boldsymbol{\varepsilon}\)</span>: <span class="math inline">\(\sigma_y = 2F_y/t\)</span>, <span class="math inline">\(\tau_{xy} = 2F_x/t\)</span>, constant over the whole triangle — a CST keeping its promise. Check the vertical case <span class="math inline">\(F_x{=}0\)</span> against statics. At the nodes all is well: the reactions <span class="math inline">\(\mathbf{f}_p = \mathbf{K}_{pf}\mathbf{u}_f\)</span> are <span class="math inline">\((0,-F_y)\)</span> at node 1 and <span class="math inline">\((0,0)\)</span> at node 2, which balance the load exactly. Point by point it is not: the uniform <span class="math inline">\(\sigma_y = 2F_y/t\)</span> adds up to <span class="math inline">\(2F_y\)</span> over the clamped bottom edge (length 1, thickness <span class="math inline">\(t\)</span>), not <span class="math inline">\(F_y\)</span>, and it pushes on the hypotenuse, which should be free of traction. Equilibrium holds exactly in the nodal sense, not at every point — a first taste of discretization error, visible by hand. Refine the mesh and this local crudeness fades.</p>
+<h2 id="sec:twotri">4.5   Assembly: two triangles make a square</h2>
+<p>One element is a toy; the method begins with the second element. Mesh a unit square (side 1, thickness <span class="math inline">\(t\)</span>, <span class="math inline">\(E\)</span>, <span class="math inline">\(\nu=0\)</span>) into two triangles by the diagonal <span class="math inline">\(1\)</span>–<span class="math inline">\(3\)</span> (Fig. <a href="04_plane_elasticity_and_triangles.html#fig:square">4.3</a>): element <span class="math inline">\(\mathrm{I}\)</span> with nodes <span class="math inline">\((1,2,3)\)</span>, element <span class="math inline">\(\mathrm{II}\)</span> with nodes <span class="math inline">\((1,3,4)\)</span> — both counterclockwise.</p>
+<figure id="fig:square">
+<img src="figs/04_fig3.svg" style="width:243px" alt="" />
+<figcaption><strong>Figure 4.3.</strong> A square as two CSTs. Left edge clamped, horizontal loads <span class="math inline">\(F\)</span> at the right-edge nodes.</figcaption>
+</figure>
+<p>Run Steps 1–3 of Section <a href="04_plane_elasticity_and_triangles.html#sec:cst-hand">4.4</a> once per element (do element I by hand; it is the same drill with coordinates <span class="math inline">\((0,0),(1,0),(1,1)\)</span>): <span class="math display">\[\mathbf{k}^{\mathrm{I}} = \frac{Et}{4}
+  \begin{bmatrix}
+   2 &amp; 0 &amp; -2 &amp; 0 &amp; 0 &amp; 0\\
+   0 &amp; 1 &amp; 1 &amp; -1 &amp; -1 &amp; 0\\
+   -2 &amp; 1 &amp; 3 &amp; -1 &amp; -1 &amp; 0\\
+   0 &amp; -1 &amp; -1 &amp; 3 &amp; 1 &amp; -2\\
+   0 &amp; -1 &amp; -1 &amp; 1 &amp; 1 &amp; 0\\
+   0 &amp; 0 &amp; 0 &amp; -2 &amp; 0 &amp; 2
+  \end{bmatrix},
+  \qquad
+  \mathbf{k}^{\mathrm{II}} = \frac{Et}{4}
+  \begin{bmatrix}
+   1 &amp; 0 &amp; 0 &amp; -1 &amp; -1 &amp; 1\\
+   0 &amp; 2 &amp; 0 &amp; 0 &amp; 0 &amp; -2\\
+   0 &amp; 0 &amp; 2 &amp; 0 &amp; -2 &amp; 0\\
+   -1 &amp; 0 &amp; 0 &amp; 1 &amp; 1 &amp; -1\\
+   -1 &amp; 0 &amp; -2 &amp; 1 &amp; 3 &amp; -1\\
+   1 &amp; -2 &amp; 0 &amp; -1 &amp; -1 &amp; 3
+  \end{bmatrix}.\]</span> (Two different matrices! Same formulas, different geometry — each triangle has its own orientation. There is no “the” CST matrix, only the CST <em>recipe</em>.)</p>
+<p>The connectivity tables map local to global DOFs (node <span class="math inline">\(i\mapsto\)</span> DOFs <span class="math inline">\(2i\!-\!1, 2i\)</span>): <span class="math display">\[\begin{array}{c|cccccc}
+ &amp; \multicolumn{6}{c}{\text{local DOF } 1\ \ 2\ \ 3\ \ 4\ \ 5\ \ 6}\\\hline
+\text{element I } (1,2,3) &amp; 1 &amp; 2 &amp; 3 &amp; 4 &amp; 5 &amp; 6\\
+\text{element II } (1,3,4) &amp; 1 &amp; 2 &amp; 5 &amp; 6 &amp; 7 &amp; 8
+\end{array}\]</span> Adding both <span class="math inline">\(6\times6\)</span> blocks into an <span class="math inline">\(8\times8\)</span> grid of zeros: <span id="eq:Ksquare"></span><span class="math display">\[\mathbf{K} = \frac{Et}{4}
+  \begin{bmatrix}
+   3 &amp; 0 &amp; -2 &amp; 0 &amp; 0 &amp; -1 &amp; -1 &amp; 1\\
+   0 &amp; 3 &amp; 1 &amp; -1 &amp; -1 &amp; 0 &amp; 0 &amp; -2\\
+   -2 &amp; 1 &amp; 3 &amp; -1 &amp; -1 &amp; 0 &amp; \mathbf{0} &amp; \mathbf{0}\\
+   0 &amp; -1 &amp; -1 &amp; 3 &amp; 1 &amp; -2 &amp; \mathbf{0} &amp; \mathbf{0}\\
+   0 &amp; -1 &amp; -1 &amp; 1 &amp; 3 &amp; 0 &amp; -2 &amp; 0\\
+   -1 &amp; 0 &amp; 0 &amp; -2 &amp; 0 &amp; 3 &amp; 1 &amp; -1\\
+   -1 &amp; 0 &amp; \mathbf{0} &amp; \mathbf{0} &amp; -2 &amp; 1 &amp; 3 &amp; -1\\
+   1 &amp; -2 &amp; \mathbf{0} &amp; \mathbf{0} &amp; 0 &amp; -1 &amp; -1 &amp; 3
+  \end{bmatrix}
+  \qquad
+  \begin{matrix}\leftarrow\text{node 1}\\[5mm]
+  \leftarrow\text{node 2}\\[5mm] \leftarrow\text{node 3}\\[5mm]
+  \leftarrow\text{node 4}\end{matrix}
+  
+\tag{4.9}\]</span> The nodes on the shared diagonal (1 and 3) receive contributions from <em>both</em> elements — their diagonal blocks are sums, exactly like node 2 of the spring chain. And look at the bold zeros: nodes 2 and 4 share no element, so their <span class="math inline">\(2\times2\)</span> coupling block is exactly zero — the 2D incarnation of “<span class="math inline">\(K_{13}=0\)</span> in the chain”. Sparsity is not an optimization trick; it is the mesh drawn in matrix form.</p>
+<p><strong>A load case solved.</strong> Clamp the left edge (nodes 1 and 4: DOFs 1, 2, 7, 8), pull with horizontal <span class="math inline">\(F\)</span> at each right-edge node (DOFs 3 and 5). Solving the remaining <span class="math inline">\(4\times4\)</span> system <span class="math inline">\(\mathbf{K}_{ff}\mathbf{u}_f = [F,\,0,\,F,\,0]^{\mathsf{T}}\)</span> — by computer now, this is where we gladly hand over — <span class="math display">\[u_2 = u_3 = \frac{2F}{Et}, \qquad v_2 = v_3 = 0 .\]</span> And here the hand check returns in style: total load <span class="math inline">\(2F\)</span> over the right edge (area <span class="math inline">\(t\cdot1\)</span>) means uniform stress <span class="math inline">\(\sigma_x = 2F/t\)</span>, strain <span class="math inline">\(\varepsilon_x = 2F/(Et)\)</span>, hence end displacement <span class="math inline">\(\varepsilon_x \cdot 1 = 2F/(Et)\)</span>. The FEM answer is <em>exact</em> (thanks to <span class="math inline">\(\nu=0\)</span>: with <span class="math inline">\(\nu\neq0\)</span> the clamp would restrain the sideways contraction, and the strain would no longer be uniform) — uniform strain lies inside the CST ansatz space, and Galerkin never misses a solution that lives inside its family (the Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a> principle, for the third and most satisfying time).</p>
+<h2 id="quadrilateral-elements">4.6   Quadrilateral elements</h2>
+<p>Triangles tile anything but are stiff little creatures — one constant strain each. The workhorse of practical 2D analysis is the four-node quadrilateral (<em>Q4</em>). Its construction adds exactly two ideas, both destined to dominate practical FEM technology:</p>
+<h5 id="idea-1-a-reference-element.">Idea 1: a reference element.</h5>
+<p>On a square with <em>natural coordinates</em> <span class="math inline">\(\xi,\eta \in [-1,1]\)</span>, bilinear shape functions <span id="eq:q4N"></span><span class="math display">\[N_i(\xi,\eta) = \tfrac14 (1+\xi_i\,\xi)(1+\eta_i\,\eta),
+  \qquad (\xi_i,\eta_i) = (\pm1,\pm1) \text{ at corner } i,
+  
+\tag{4.10}\]</span> satisfy the usual Kronecker and partition-of-unity properties (check corner by corner). The term <span class="math inline">\(\xi\eta\)</span> beyond plain linearity lets the element bend its strain field linearly across itself — one reason a Q4 generally beats two CSTs of the same real estate.</p>
+<h5 id="idea-2-mapping-the-isoparametric-trick.">Idea 2: mapping — the isoparametric trick.</h5>
+<p>A real mesh contains skewed quadrilaterals, not perfect squares. Rather than deriving shape functions for every skewed shape, map the reference square onto each physical element using <em>the shape functions themselves</em>: <span class="math display">\[x(\xi,\eta) = \sum_i N_i(\xi,\eta)\,x_i,
+  \qquad
+  y(\xi,\eta) = \sum_i N_i(\xi,\eta)\,y_i .\]</span> Same functions for geometry and displacement — hence <em>iso-parametric</em> (Fig. <a href="04_plane_elasticity_and_triangles.html#fig:q4map">4.4</a>). The price: derivatives with respect to <span class="math inline">\(x,y\)</span> must be routed through the mapping (chain rule, bundled in the <em>Jacobian matrix</em> <span class="math inline">\(\mathbf{J}\)</span>), so <span class="math inline">\(\mathbf{B}\)</span> now varies over the element, and the stiffness integral <span class="math display">\[\mathbf{k}^e = \int_{-1}^{1}\!\!\int_{-1}^{1}
+      \mathbf{B}^{\mathsf{T}}(\xi,\eta)\,\mathbf{D}\,\mathbf{B}(\xi,\eta)\; t\,\det\mathbf{J} \;\mathrm{d}\xi\,\mathrm{d}\eta\]</span> is no longer a closed-form product. It is evaluated by <em>numerical quadrature</em>: sample the integrand at a few cleverly chosen <em>Gauss points</em> (<span class="math inline">\(2\times2\)</span> for Q4), weight, and sum. Every serious FEM code computes essentially all its integrals this way.</p>
+<figure id="fig:q4map">
+<img src="figs/04_fig4.svg" style="width:476px" alt="" />
+<figcaption><strong>Figure 4.4.</strong> The isoparametric Q4: shape functions are defined once on the reference square; the same functions map it onto each (possibly skewed) physical element, where the stiffness integral is evaluated at Gauss points.</figcaption>
+</figure>
+<p>Nothing else is new: the Q4’s <span class="math inline">\(\mathbf{k}^e\)</span> is <span class="math inline">\(8\times8\)</span> (<span class="math inline">\(4\)</span> nodes <span class="math inline">\(\times\,2\)</span> DOFs), assembly uses the same connectivity tables, boundary conditions the same partitioning. Higher-order members of both families (6-node triangles, 8- or 9-node quadrilaterals — curved edges included, courtesy of the isoparametric map) refine the ansatz, not the method.</p>
+<h2 id="sec:pattern">4.7   The general pattern — and a name for it</h2>
+<p>Step back and compress everything into the form it takes in every FEM code and every physics:</p>
+<div class="recipe">
+<div class="boxtitle">
+<p>The FEM recipe</p>
+</div>
+<ol>
+<li><p><strong>Physics <span class="math inline">\(\to\)</span> strong form.</strong> Write the three relations — kinematic, material, balance — and chain them into the governing equation(s) on the domain <span class="math inline">\(\Omega\)</span>; sort boundary data into essential and natural.</p></li>
+<li><p><strong>Weak form.</strong> Weight, integrate, shift one derivative (integration by parts / divergence theorem); natural BCs migrate into the load side. For our self-adjoint problems: equivalently, write the potential energy.</p></li>
+<li><p><strong>Discretize.</strong> Mesh <span class="math inline">\(\Omega\)</span>; choose shape functions <span class="math inline">\(\mathbf{N}\)</span> with the Kronecker property; unknowns become nodal values.</p></li>
+<li><p><strong>Element matrices.</strong> <span class="math inline">\(\boldsymbol{\varepsilon}= \mathbf{B}\,\mathbf{d}\)</span> with <span class="math inline">\(\mathbf{B} = (\text{derivative operator})\,\mathbf{N}\)</span>, then <span class="math display">\[\mathbf{k}^e = \int_{\Omega^e} \mathbf{B}^{\mathsf{T}}\mathbf{D}\,\mathbf{B} \;\mathrm{d}V,
+        \qquad
+        \mathbf{f}^e = \int_{\Omega^e} \mathbf{N}^{\mathsf{T}}\mathbf{b} \;\mathrm{d}V
+                  + \int_{\Gamma^e} \mathbf{N}^{\mathsf{T}}\bar{\mathbf{t}}\;\mathrm{d}\Gamma ,\]</span> evaluated exactly (CST, bar) or by Gauss quadrature (everything else).</p></li>
+<li><p><strong>Assemble</strong> via connectivity tables: <span class="math inline">\(\mathbf{K}\)</span>, <span class="math inline">\(\mathbf{f}\)</span>.</p></li>
+<li><p><strong>Boundary conditions.</strong> Per DOF one known of the conjugate pair; partition; solve <span class="math inline">\(\mathbf{K}_{ff}\mathbf{u}_f = \mathbf{f}_f - \mathbf{K}_{fp}\mathbf{u}_p\)</span> (once per load case).</p></li>
+<li><p><strong>Post-process.</strong> Element by element: <span class="math inline">\(\boldsymbol{\varepsilon}= \mathbf{B}\mathbf{d}\)</span>, <span class="math inline">\(\boldsymbol{\sigma }= \mathbf{D}\boldsymbol{\varepsilon}\)</span>; reactions from the retained rows. Then <em>check</em>: equilibrium of reactions, symmetry, a known limit case.</p></li>
+</ol>
+</div>
+<p>Only steps 1 and 4 ever hear which physics is being solved — and even they only through the <em>cast list</em>. The three-relation structure we first met in Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a> and rebuilt for heat (the exercise) and for plane elasticity (<a href="04_plane_elasticity_and_triangles.html#eq:kin2d">(4.1)</a>–<a href="04_plane_elasticity_and_triangles.html#eq:equil2d">(4.3)</a>) is a general classification of physical theories; diagrams of this kind are called <em>Tonti diagrams</em>, after Enzo Tonti, who charted them across physics. Our version, as a table:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>primal field</strong></th>
+<th style="text-align: left;"><strong>gradient</strong></th>
+<th style="text-align: left;"><strong>flux / stress</strong></th>
+<th style="text-align: left;"><strong>material law</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">bar / elasticity</td>
+<td style="text-align: left;">displacement <span class="math inline">\(u\)</span></td>
+<td style="text-align: left;">strain <span class="math inline">\(\boldsymbol{\varepsilon}\)</span></td>
+<td style="text-align: left;">stress <span class="math inline">\(\boldsymbol{\sigma}\)</span>, force <span class="math inline">\(N\)</span></td>
+<td style="text-align: left;">Hooke <span class="math inline">\(E\)</span>, <span class="math inline">\(\mathbf{D}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">heat conduction</td>
+<td style="text-align: left;">temperature <span class="math inline">\(T\)</span></td>
+<td style="text-align: left;">gradient <span class="math inline">\(g\)</span></td>
+<td style="text-align: left;">heat flux <span class="math inline">\(q\)</span></td>
+<td style="text-align: left;">Fourier <span class="math inline">\(\lambda\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">electrostatics</td>
+<td style="text-align: left;">potential <span class="math inline">\(V\)</span></td>
+<td style="text-align: left;">field <span class="math inline">\(-\nabla V\)</span></td>
+<td style="text-align: left;">displacement <span class="math inline">\(\mathbf{D}_{\mathrm{el}}\)</span></td>
+<td style="text-align: left;">permittivity <span class="math inline">\(\epsilon\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">groundwater flow</td>
+<td style="text-align: left;">head <span class="math inline">\(h\)</span></td>
+<td style="text-align: left;">gradient</td>
+<td style="text-align: left;">seepage flux</td>
+<td style="text-align: left;">Darcy <span class="math inline">\(\kappa\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"></td>
+<td colspan="4" style="text-align: left;">…and each row closes with a balance law of its flux against its source.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Learn one row deeply — we chose two — and you own the lot: the FEM you now know solves every row, with <span class="math inline">\(\mathbf{D}\)</span> recast and the words renamed.</p>
+<h2 id="where-to-go-from-here">4.8   Where to go from here</h2>
+<p>What we deliberately left out, in ascending order of adventure: <em>three dimensions</em> (tetrahedra and hexahedra; <span class="math inline">\(\mathbf{B}\)</span> grows to <span class="math inline">\(6\times3n\)</span>, nothing else changes); <em>beams, plates and shells</em> (structural members like the truss bar, but carrying bending — they re-introduce rotations as DOFs and a subtler zoo of shape functions); and the mathematics of <em>convergence</em> — the rigorous version of the comfort we sampled empirically in Fig. <a href="02_boundary_value_problem.html#fig:fevsexact">2.7</a>.</p>
+<p>Two continuations are part of these notes. Lecture 5 adds <em>dynamics</em>: a mass matrix <span class="math inline">\(\mathbf{M}\)</span> joins <span class="math inline">\(\mathbf{K}\)</span> in <span class="math inline">\(\mathbf{M}\ddot{\mathbf{u}} + \mathbf{K}\mathbf{u} = \mathbf{f}\)</span>. Lecture 6 adds <em>nonlinearity</em>: <span class="math inline">\(\mathbf{K}\)</span> starts depending on <span class="math inline">\(\mathbf{u}\)</span>, and Newton’s method solves a <em>sequence</em> of problems shaped exactly like ours. Both return to chains of springs and bars, where the new ideas can be computed by hand. In addition, Lecture C takes the plane problems of this lecture to physics-informed neural networks (after Lectures A and B).</p>
+<p>Every one of these is an extension of the recipe box above, not a replacement for it. You now hold the pattern. The rest of the finite element method is the pattern, practiced.</p>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="03_trusses_in_the_plane.html">← Lecture 3</a> <a href="05_mass_damping_and_time.html">Lecture 5 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

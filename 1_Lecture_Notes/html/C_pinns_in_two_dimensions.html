@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PINNs in Two Dimensions — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="S2_worked_pann_examples.html">← Supplement S2</a> <a href="D_model_reduction_pod.html">Lecture D →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture C</p>
+<h1>PINNs in Two Dimensions</h1>
+<p><em>Builds on Lectures A and B (with Supplement S1), and on Lecture 4.</em></p>
+<h2 id="c.1-what-changes-in-two-dimensions-and-what-does-not">C.1   What changes in two dimensions — and what does not</h2>
+<p>Lecture 4 took the finite element method from the line to the plane and found that not one concept had to be added — only indices. We now make the same trip with the physics-informed networks of Lecture B, and the first thing to report is the same: the <em>loss anatomy</em> of Lecture B survives untouched. Ansatz, residual at collocation points, boundary terms by construction or by persuasion, optional data term, training. What changes is bookkeeping, plus one matter of substance that we have been promising since the 1D examples of Supplement S1:</p>
+<ul>
+<li><p><strong>Points fill an area, and the boundary is a curve.</strong> Collocation points are scattered over a region; boundary conditions hold along a line, so the boundary needs points of its own.</p></li>
+<li><p><strong>Derivatives become partial.</strong> The residual contains <span class="math inline">\(\partial^2/\partial x^2\)</span> and <span class="math inline">\(\partial^2/\partial y^2\)</span>; the chain rule still differentiates the network exactly.</p></li>
+<li><p><strong>Hard boundary conditions need a multiplier that vanishes on a curve</strong>, not at a point. Easy for a disk or a square; real work for a bracket with holes.</p></li>
+<li><p><strong>Unknowns may be vectors</strong>: elasticity asks for two fields, <span class="math inline">\(u\)</span> and <span class="math inline">\(v\)</span> — one network, two outputs.</p></li>
+<li><p><strong>The shortcut dies.</strong> In the 1D bar of Supplement S1 every inverse problem could be checked by statics, because the bar was statically determinate. In the plane the internal fields depend on the unknown material distribution, no closed form exists, and the joint training of field and parameters stops being a rehearsal. This is the lecture where the method is finally asked to do something we cannot do by hand.</p></li>
+</ul>
+<p>The house rule holds: every idea first at pencil scale.</p>
+<h2 id="c.2-a-second-physics-for-the-plane-heat-in-a-plate">C.2   A second physics for the plane: heat in a plate</h2>
+<p>Lecture 4 treated one 2D physics, elasticity. For a first PINN a scalar field is kinder, so we add the two-dimensional twin of Exercise 2 — by the usual three steps, in three lines. Temperature <span class="math inline">\(T(x,y)\)</span>; its gradient <span class="math inline">\(\mathbf{g} = \nabla T\)</span> (kinematics); Fourier’s law <span class="math inline">\(\mathbf{q} = -\lambda\,\mathbf{g}\)</span> (material); heat balance of a small rectangle, <span class="math inline">\(\frac{\partial q_x}{\partial x} + \frac{\partial q_y}{\partial y} = s\)</span> (balance). Chained, for constant <span class="math inline">\(\lambda\)</span>: <span id="eq:poisson"></span><span class="math display">\[-\lambda\,\Delta T = s \quad\text{in } \Omega,
+  \qquad
+  \Delta T = \frac{\partial ^2T}{\partial x^2} + \frac{\partial ^2T}{\partial y^2},
+  
+\tag{C.1}\]</span> with temperature prescribed on the boundary (essential) or heat flux prescribed (natural). This is the second row of the table that closed Lecture 4, and the same equation describes a pressurized membrane and the torsion of a shaft. We write <span class="math inline">\(u\)</span> for the unknown and set <span class="math inline">\(\lambda = 1\)</span>.</p>
+<h2 id="c.3-example-1-a-one-parameter-pinn-on-a-disk">C.3   Example 1: a one-parameter PINN on a disk</h2>
+<p>A heated disk with a cooled rim: <span class="math inline">\(-\Delta u = 4\)</span> inside the unit circle, <span class="math inline">\(u = 0\)</span> on it. Exact solution: <span class="math inline">\(u = 1 - x^2 - y^2\)</span> (check: each second derivative is <span class="math inline">\(-2\)</span>).</p>
+<p>For the ansatz we need a family that vanishes on the whole rim, whatever its parameter. The function <span class="math inline">\(1 - x^2 - y^2\)</span> is zero exactly on the unit circle and positive inside — a <em>distance-like</em> function of the boundary. Multiply it by anything and the boundary condition is hard: <span class="math display">\[\tilde u(x,y;\,a) = a\,(1 - x^2 - y^2).\]</span> The residual: <span class="math inline">\(\Delta\tilde u + 4 = -4a + 4\)</span>, the same at every point, so whatever collocation points we scatter over the disk (Fig. <a href="C_pinns_in_two_dimensions.html#fig:domains">C.1</a>, left), <span class="math display">\[J(a) = 16\,(1-a)^2, \qquad J&#39;(a) = -32\,(1-a),\]</span> and gradient descent with <span class="math inline">\(\eta = \tfrac1{64}\)</span> from <span class="math inline">\(a^0 = 0\)</span> gives <span class="math inline">\(a^{k+1} = a^k + \tfrac12(1 - a^k)\)</span>: <span class="math display">\[a^k:\quad 0,\ \tfrac12,\ \tfrac34,\ \tfrac78,\ \tfrac{15}{16},\ \dots \;\to\; 1 .\]</span> The very table of the 1D pencil PINN (Supplement S1, Section <a href="S1_worked_pinn_examples.html#sec:rung1">S1.2.1</a>), halving the error each step, converging to the exact solution. Two dimensions changed the Laplacian and nothing else.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Hard boundary conditions in 2D</strong>: write <span class="math inline">\(\tilde u = \bar u + \phi\cdot(\text{free part})\)</span> with a function <span class="math inline">\(\phi\)</span> that is zero on the essential boundary and nonzero inside. In 1D <span class="math inline">\(\phi\)</span> was <span class="math inline">\(x\)</span>, or <span class="math inline">\(x(L-x)\)</span>; in 2D it is <span class="math inline">\(1 - x^2 - y^2\)</span> for the disk, <span class="math inline">\(x(1-x)\,y(1-y)\)</span> for the unit square. Finding <span class="math inline">\(\phi\)</span> for a complicated shape is the 2D price of “by construction” — and the reason penalties are popular (Section <a href="C_pinns_in_two_dimensions.html#sec:softbc">C.6</a>).</p>
+</div>
+<figure id="fig:domains">
+<img src="figs/C_fig1.svg" style="width:706px" alt="" />
+<figcaption><strong>Figure C.1.</strong> Two domains, their distance-like multipliers <span class="math inline">\(\phi\)</span>, and the two kinds of points a 2D PINN uses. With a hard boundary condition the green points are not needed.</figcaption>
+</figure>
+<h2 id="sec:square">C.4   Example 2: when the truth is not in the family</h2>
+<p>The disk was kind: its exact solution lay inside the one-parameter family. Change the domain to the unit square — <span class="math inline">\(-\Delta u = 1\)</span>, <span class="math inline">\(u=0\)</span> on all four edges — and that luck ends. The exact solution is an infinite series; its value at the center is <span class="math inline">\(u(\tfrac12,\tfrac12) = 0.0737\)</span>. Take the natural one-parameter ansatz <span class="math display">\[\tilde u = a\,\phi, \qquad \phi = x(1-x)\,y(1-y),
+  \qquad
+  R(x,y) = 1 - 2a\,\bigl[x(1-x) + y(1-y)\bigr],\]</span> and the residual now varies over the square: it cannot be made zero everywhere. So we are back at the question of Lecture 2 — <em>in what sense small?</em> — and can replay all three answers by hand, because every integral is a product of 1D polynomial integrals:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>method</strong></th>
+<th style="text-align: center;"><strong>condition</strong></th>
+<th style="text-align: center;"><span class="math inline">\(a\)</span></th>
+<th style="text-align: center;"><span class="math inline">\(\tilde u(\tfrac12,\tfrac12)\)</span> <strong>(exact: 0.0737)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">collocation at the center</td>
+<td style="text-align: center;"><span class="math inline">\(R(\tfrac12,\tfrac12)=0\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.0625\)</span>  (<span class="math inline">\(-15\,\%\)</span>)</td>
+</tr>
+<tr>
+<td style="text-align: left;">least squares</td>
+<td style="text-align: center;"><span class="math inline">\(\min\iint R^2\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(\tfrac{15}{11}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.0852\)</span>  (<span class="math inline">\(+16\,\%\)</span>)</td>
+</tr>
+<tr>
+<td style="text-align: left;">Galerkin (weak form)</td>
+<td style="text-align: center;"><span class="math inline">\(\iint \nabla\phi\cdot\nabla\tilde u = \iint \phi\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(\tfrac54\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.0781\)</span>  (<span class="math inline">\(+6\,\%\)</span>)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>(For Galerkin: <span class="math inline">\(\iint|\nabla\phi|^2 = \tfrac1{45}\)</span> and <span class="math inline">\(\iint\phi = \tfrac1{36}\)</span>, hence <span class="math inline">\(a = \tfrac{45}{36}\)</span>.) Three sensible methods, three different answers, none exact. In Lecture 2 (Example 2, Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a>) the three happened to agree for the one-parameter ansatz, with collocation at the midpoint; in the plane they part company. Galerkin comes closest here, which fits its pedigree: within the family it is the best approximation in the sense of the energy. The table also says what a strong-form PINN <em>is</em> in this company: it is the least-squares row, with the single function <span class="math inline">\(\phi\)</span> replaced by <span class="math inline">\(\phi\)</span> times a network, and the integral by a sum over points.</p>
+<h2 id="c.5-example-3-a-2d-pinn-with-a-network">C.5   Example 3: a 2D PINN with a network</h2>
+<p>Replace the lone parameter by a network with two inputs, <span class="math display">\[\tilde u(x,y) = \phi(x,y)\cdot g(x,y;\mathbf{w}),
+  \qquad
+  g = \sum_{j=1}^{H} c_j\tanh(w_j x + v_j y + b_j) + c_0 .\]</span> Each hidden unit is now a smooth <em>ridge</em> — a step across some direction in the plane, with trainable orientation <span class="math inline">\((w_j, v_j)\)</span>, position and steepness. The Laplacian of the product follows from the product rule, <span class="math display">\[\Delta(\phi g) = g\,\Delta\phi + 2\,\nabla\phi\cdot\nabla g + \phi\,\Delta g,\]</span> every piece an explicit formula; this is the bookkeeping that automatic differentiation performs silently in real frameworks. The loss is the mean of <span class="math inline">\((\Delta\tilde u + 1)^2\)</span> over a <span class="math inline">\(15\times15\)</span> grid of collocation points. Trained with Adam, the refined gradient descent met in Lecture A (<span class="math inline">\(H = 10\)</span> units, 41 weights):</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">training steps</th>
+<th style="text-align: center;">500</th>
+<th style="text-align: center;">1500</th>
+<th style="text-align: center;">3000</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">loss <span class="math inline">\(J\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.7\cdot10^{-2}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(5.9\cdot10^{-3}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(2.9\cdot10^{-3}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">center value (exact <span class="math inline">\(0.0737\)</span>)</td>
+<td style="text-align: center;"><span class="math inline">\(0.0728\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.0732\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.0745\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">largest error over the square</td>
+<td style="text-align: center;"><span class="math inline">\(1.1\cdot10^{-3}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.8\cdot10^{-3}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.9\cdot10^{-3}\)</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>About one percent — several times better than the best one-parameter answer, with no mesh and no integral evaluated by hand. But read the table’s last two columns against each other: between 1500 and 3000 steps the loss <em>halved</em> while the error <em>did not improve</em>. That is Lecture A’s warning made visible — the optimizer minimizes the residual, we care about the error, and the two are different quantities connected only through the problem itself. In a real application there is no last row of the table, because there is no exact solution to compare with; the loss is all one sees. Treat a falling loss as necessary, never as sufficient.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>The scorecard, in 2D.</strong> A finite element mesh of a few hundred triangles — Lecture 4’s machinery with a scalar unknown — reaches this accuracy with one sparse linear solve, in milliseconds, with a convergence guarantee. The network needed thousands of loss evaluations. The verdict of Lecture B stands in the plane: for one well-posed forward problem on a meshable domain, FEM. The case for the network is made in Section <a href="C_pinns_in_two_dimensions.html#sec:inverse2d">C.8</a>.</p>
+</div>
+<h2 id="sec:softbc">C.6   Soft boundary conditions on a curve</h2>
+<p>For a domain with no convenient <span class="math inline">\(\phi\)</span>, boundary conditions go back into the loss. Scatter points along the boundary (green in Fig. <a href="C_pinns_in_two_dimensions.html#fig:domains">C.1</a>) and add <span class="math display">\[J = \frac{1}{m}\sum_{\text{interior}} R(x_i,y_i)^2
+    \;+\; \beta_\Gamma\,\frac{1}{m_\Gamma}
+      \sum_{\text{boundary}} \bigl(\tilde u(x_j,y_j) - \bar u_j\bigr)^2 ,\]</span> with flux conditions penalized likewise through the normal derivative. (The penalty weight is called <span class="math inline">\(\beta_\Gamma\)</span> here, not <span class="math inline">\(\lambda\)</span> as in Lecture B, because <span class="math inline">\(\lambda\)</span> is the conductivity.) Everything Example 2 of Supplement S1 taught applies with more force: the wall now leaks along its whole length, the penalty weight <span class="math inline">\(\beta_\Gamma\)</span> trades boundary accuracy against equation accuracy, and the landscape gets harder to walk. Practical advice in one line: make hard what can be made hard — at least the simple parts of the boundary — and persuade only the rest.</p>
+<h2 id="c.7-elasticity-two-fields-and-the-energy-road">C.7   Elasticity: two fields, and the energy road</h2>
+<p>Lecture 4’s plane problem has two unknown fields. One network with two outputs represents both, <span class="math inline">\((\tilde u, \tilde v)\)</span>. The strong-form residual is the pair of equilibrium equations of Section <a href="04_plane_elasticity_and_triangles.html#sec:plane3steps">4.1</a>, <span class="math display">\[R_x = \frac{\partial \sigma_x}{\partial x} + \frac{\partial \tau_{xy}}{\partial y} + b_x,
+  \qquad
+  R_y = \frac{\partial \tau_{xy}}{\partial x} + \frac{\partial \sigma_y}{\partial y} + b_y,\]</span> with the stresses obtained from the network through kinematics and <span class="math inline">\(\mathbf{D}\)</span> — second derivatives of both outputs, two residuals per point, and traction boundary conditions as further penalties. It works, but Lecture B already showed the better road for elasticity: minimize the potential energy of Section <a href="04_plane_elasticity_and_triangles.html#sec:planeenergy">4.2</a>, <span class="math display">\[\Pi[\tilde u,\tilde v]
+  = \tfrac12\int_\Omega \boldsymbol{\varepsilon}^{\mathsf{T}}\mathbf{D}\,\boldsymbol{\varepsilon}\;t\,\mathrm{d}A
+    - (\text{work of the loads}),\]</span> evaluated by sampling points in the area. First derivatives only; the traction conditions enter as work terms and need no penalty; and the loss is the physical energy, not an arbitrary squared residual.</p>
+<h5 id="a-pencil-version-on-a-problem-you-have-already-solved.">A pencil version, on a problem you have already solved.</h5>
+<p>The unit square of Section <a href="04_plane_elasticity_and_triangles.html#sec:twotri">4.5</a>: clamped along the left edge, pulled by a force <span class="math inline">\(F\)</span> at each of the two right-hand corners, <span class="math inline">\(\nu = 0\)</span> (Fig. <a href="C_pinns_in_two_dimensions.html#fig:plate">C.2</a>, left). Ansatz with the clamp built in: <span class="math inline">\(\tilde u = a\,x\)</span>, <span class="math inline">\(\tilde v = 0\)</span>. Then <span class="math inline">\(\varepsilon_x = a\)</span> is the only strain, and <span class="math display">\[\Pi(a) = \tfrac12\,E\,t\,a^2 \;-\; 2F\,a
+  \qquad\Longrightarrow\qquad
+  \Pi&#39;(a) = E\,t\,a - 2F = 0
+  \;\Rightarrow\; a = \frac{2F}{E\,t} .\]</span> The end displacement <span class="math inline">\(\tilde u(1,y) = 2F/(Et)\)</span> — exactly what two constant-strain triangles delivered in Lecture 4 through an <span class="math inline">\(8\times8\)</span> assembly, and exactly what the uniform-stress argument gave in one line. Three routes, one number: the triangle mesh, the energy with a one-parameter family, and elementary statics. (Gradient descent on <span class="math inline">\(\Pi(a)\)</span> with <span class="math inline">\(\eta = 1/(2Et)\)</span> halves the error per step, as you now expect.) A network in place of <span class="math inline">\(a\,x\)</span> changes nothing in the formulation — and for this load case gains nothing, since the truth is already in the family.</p>
+<figure id="fig:plate">
+<img src="figs/C_fig2.svg" style="width:674px" alt="" />
+<figcaption><strong>Figure C.2.</strong> Left: Lecture 4’s stretched square, solved once more by a one-parameter energy minimization. Right: the inverse problem of Section <a href="C_pinns_in_two_dimensions.html#sec:inverse2d">C.8</a> — a plate with an inclusion of unknown position and strength, observed by a grid of temperature sensors.</figcaption>
+</figure>
+<h2 id="sec:inverse2d">C.8   The payoff: an inverse problem with no shortcut</h2>
+<p>Here is the problem this lecture was built to reach. A heated plate contains an inclusion — a patch of different conductivity, of unknown position and strength: <span class="math display">\[-\nabla\!\cdot\!\bigl(\lambda(x,y)\,\nabla T\bigr) = s,
+  \qquad
+  \lambda(x,y;\,d,x_c,y_c)
+  = 1 + d\,\exp\!\Bigl(-\frac{(x-x_c)^2 + (y-y_c)^2}{w_z^2}\Bigr).\]</span> The heat source <span class="math inline">\(s\)</span> is known, the edges are held at <span class="math inline">\(T=0\)</span>, and the temperature is measured at a <span class="math inline">\(6\times6\)</span> grid of sensors (Fig. <a href="C_pinns_in_two_dimensions.html#fig:plate">C.2</a>, right). Find the inclusion.</p>
+<p>To have a truth to compare with, the example is <em>manufactured</em>: we choose the temperature field <span class="math inline">\(T = \sin\pi x\,\sin\pi y\)</span>, which vanishes on the edges, and compute the source <span class="math inline">\(s\)</span> that the true inclusion (of width <span class="math inline">\(w_z = 0.15\)</span>) needs in order to produce exactly this field. The “measurements” are the values of that field at the sensors.</p>
+<p>In the 1D damage problem of Supplement S1 (Section <a href="S1_worked_pinn_examples.html#sec:rung6">S1.3.3</a>) there was a way around the network: the bar was statically determinate, the internal force was known before any stiffness was, and the stiffness followed by division. Look for the corresponding shortcut here and there is none. The heat flux <span class="math inline">\(\mathbf{q} = -\lambda\nabla T\)</span> is not known in advance: heat flows <em>around</em> a poor conductor and <em>through</em> a good one, so the flux field itself depends on the unknown <span class="math inline">\(\lambda\)</span>. Field and material must be found together — which is precisely what the joint loss does: <span class="math display">\[J(\mathbf{w}, d, x_c, y_c) =
+  \frac1m\sum_i
+  \Bigl[\lambda\,\Delta\tilde T + \nabla\lambda\cdot\nabla\tilde T + s\Bigr]^2_{(x_i,y_i)}
+  \;+\; \beta_d\,\frac{1}{36}\sum_{j=1}^{36}
+  \bigl(\tilde T(x_j,y_j) - T_j^{\mathrm{meas}}\bigr)^2 ,\]</span> with <span class="math inline">\(\tilde T = \phi\cdot g\)</span> as in Example 3, and three extra trainable numbers; <span class="math inline">\(\beta_d\)</span> weights the data as <span class="math inline">\(\beta_\Gamma\)</span> weighted the boundary. The run behind the table uses ten <span class="math inline">\(\tanh\)</span> units, a <span class="math inline">\(15\times15\)</span> grid of residual points and <span class="math inline">\(\beta_d = 2000\)</span>. Started from a weak inclusion in the middle of the plate, with true values <span class="math inline">\(d = 1\)</span>, <span class="math inline">\((x_c, y_c) = (0.6,\,0.4)\)</span>:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">training steps</th>
+<th style="text-align: center;">0</th>
+<th style="text-align: center;">1500</th>
+<th style="text-align: center;">3000</th>
+<th style="text-align: center;">6000</th>
+<th style="text-align: center;">true</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(d\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.20\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.060\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.019\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.014\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(x_c\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.50\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.598\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.600\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.600\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.6\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(y_c\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.50\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.399\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.400\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.400\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.4\)</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The position is found to three digits, the strength to under two percent, from thirty-six numbers and one differential equation. Every term of that loss was introduced in 1D with a pencil: the residual on the disk, the data term on the bar with one measurement, the joint training on the damaged bar. Nothing was added in the plane except the reason to use it.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>The same idea in elasticity.</strong> Replace temperature sensors by measured displacements — modern optical methods (digital image correlation) deliver them over a whole surface — and conductivity by stiffness, and the formulation above becomes the identification of a stiffness distribution, or of a damaged zone, in a loaded component. Replace the assumed form of <span class="math inline">\(\lambda\)</span> by a constrained material network and it becomes the combination of PINN and PANN anticipated at the end of Lecture B.</p>
+</div>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>What to distrust.</strong> The example is honest but friendly: the measurements are synthetic (values of a manufactured field, not measured) and noise-free, the form of the inclusion is assumed known, and its width <span class="math inline">\(w_z\)</span> was given. With noise the estimates scatter; with too few sensors, or sensors far from the inclusion, different inclusions fit the data equally well and the optimizer returns one of them without complaint. An inverse problem can be <em>ill-posed</em> however good the optimizer — a property of the question, not of the method, and the subject of a discipline of its own.</p>
+</div>
+<h2 id="c.9-the-recipe-and-the-two-recipes-side-by-side">C.9   The recipe, and the two recipes side by side</h2>
+<div class="recipe">
+<div class="boxtitle">
+<p>The PINN recipe</p>
+</div>
+<ol>
+<li><p><strong>Physics <span class="math inline">\(\to\)</span> strong form</strong> — as always: three relations, chained; boundary data sorted into essential and natural.</p></li>
+<li><p><strong>Choose the form of the loss</strong>: squared residual (strong form) or energy (weak form) where one exists.</p></li>
+<li><p><strong>Choose the family</strong>: a network; build in whatever conditions can be built in (<span class="math inline">\(\bar u + \phi\cdot g\)</span>).</p></li>
+<li><p><strong>Choose the points</strong>: in the domain; on the boundary for whatever is left to persuasion; at the sensors if there are data.</p></li>
+<li><p><strong>Declare the unknowns</strong>: network weights, plus any physical parameters to be identified.</p></li>
+<li><p><strong>Train</strong> — and watch more than the loss.</p></li>
+<li><p><strong>Check</strong>: against a coarse FEM solution, a limit case, a balance of fluxes or forces. The network will not warn you.</p></li>
+</ol>
+</div>
+<p>Set beside the FEM recipe that closed Lecture 4, the two share step 1, and step 2 in spirit (weak form or energy), and differ in what follows: FEM discretizes the domain into elements and gets a linear system with guarantees; the PINN keeps the domain whole, gets a nonlinear landscape without guarantees, and in exchange treats unknown parameters and measured data as first-class citizens of the same loss. Neither is the modern replacement of the other. A working engineer in the coming years will be asked to know when each is the right tool — and the answer, for most forward problems, will remain the finite element method of the earlier lectures.</p>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>Natural continuations, in ascending order of ambition: a companion 2D notebook following the three examples and the inclusion problem (planned, not yet available); soft boundary conditions on a domain with a hole, compared against a triangle mesh; the plane-elasticity identification with full-field displacement data; and, where the two threads of Lecture B meet, a physics-augmented material network trained through the equilibrium equations.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="S2_worked_pann_examples.html">← Supplement S2</a> <a href="D_model_reduction_pod.html">Lecture D →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

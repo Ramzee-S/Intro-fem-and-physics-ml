@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to Read These Notes — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="01_springs_and_stiffness.html">Lecture 1 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">&nbsp;</p>
+<h1>How to Read These Notes</h1>
+<p><em>These notes are a short introduction to the essentials of finite element modeling and of physics-based machine learning.</em> They work with intuitive examples that are small enough to compute by hand, and they are modular: the core is told in one dimension, and from there separate branches continue to two-dimensional problems, to dynamics and nonlinear problems, to physics-informed and physics-augmented neural networks, and to reduced models that describe a whole solution field with a few numbers. Every important concept is introduced on a small example first, and only afterwards generalized to the form a computer uses.</p>
+<h2 class="unnumbered" id="two-perspectives-to-start-with">Two perspectives to start with</h2>
+<p>The finite element method (FEM) can be looked at from several sides: as a structure built from many small springs, as the approximate solution of a boundary value problem, as the minimum of an energy, as a balance of virtual work. All of them describe the same method, and it helps to know more than one. These notes start with two.</p>
+<p>The first is the picture of <em>many small springs</em>. A structure is cut into simple pieces, the elements, connected at nodes; each element acts like a spring, and forces and displacements are collected in a stiffness matrix. This needs little more than small systems of linear equations, and it already contains, in miniature, everything a commercial FEM program does: elements, assembly, boundary conditions, solving, post-processing. This is Lecture 1.</p>
+<p>The second is the more formal view of a <em>boundary value problem</em>. A differential equation holds at every point of a body, with conditions on its boundary. It can rarely be solved exactly, so we look for the best approximation within a family of simple functions. This view explains <em>why</em> the method works, and it is the one that carries over to two and three dimensions, to heat flow, and to other physics. This is Lecture 2.</p>
+<p>The two perspectives meet in one equation: the element stiffness matrix of a bar element of length <span class="math inline">\(h\)</span>, <span class="math display">\[\mathbf{k}^{e}=\frac{EA}{h}\begin{bmatrix}1&amp;-1\\-1&amp;1\end{bmatrix},\]</span> which Lecture 1 obtains from a drawing and Lecture 2 from an integral. When you can derive this matrix both ways and explain why the results agree, you understand the core of the finite element method. (The energy view accompanies both lectures.) Lectures 3 and 4 take the two perspectives into the plane: trusses, then triangles and quadrilaterals. Lectures 5 and 6 give up, one at a time, the two assumptions behind everything before them: that nothing moves fast, and that the stiffness does not depend on the answer. Lectures A to D carry the same ideas — ansatz, residual, least squares — over to regression and neural networks, to physics-informed and physics-augmented networks, and to model reduction.</p>
+<h2 class="unnumbered" id="the-structure-of-the-notes">The structure of the notes</h2>
+<div class="description">
+<p>Lecture 1 (springs and the stiffness method), Lecture 2 (elasticity as a boundary value problem), and Exercise 2, which replays Lecture 2 on steady heat conduction.</p>
+<p>Lecture 3 (trusses in the plane) and Lecture 4 (plane elasticity, triangles, quadrilaterals).</p>
+<p>Lecture 5 (mass, damping, and time) and Lecture 6 (nonlinear problems and Newton’s method), both on chains of a few springs and bars.</p>
+<p>Lectures A, B and C connect the machinery to regression, neural networks, and the physics-informed and physics-augmented methods of current research. Supplements S1 and S2 are sets of worked, hand-scale examples belonging to Lecture B. Lecture D (model reduction) extracts a few shapes from many computed solutions and builds small models from them.</p>
+</div>
+<p>The lectures on the finite element method carry numbers; those on physics-based machine learning and model reduction carry letters. The printed order is only one of several reading orders (Fig. <a href="00_how_to_read.html#fig:readingmap">1</a>). After Lecture 2 and Exercise 2 the notes split into three branches that do not depend on one another:</p>
+<ul>
+<li><p><strong>into the plane</strong>: Lectures 3 and 4;</p></li>
+<li><p><strong>beyond linear statics</strong>: Lectures 5 and 6;</p></li>
+<li><p><strong>toward machine learning</strong>: Lectures A and B, with Supplements S1 and S2.</p></li>
+</ul>
+<p>Take them in any order, or leave one out. The dashed arrows of the map show where one can change from the end of one branch to the start of another: from the triangles on to dynamics (the printed order); from the nonlinear lecture back to the trusses, or on to machine learning; from Lecture B to dynamics. Two lectures stand at the end of two branches each: Lecture C needs Lecture B <em>and</em> Lecture 4; Lecture D needs Lecture 5 <em>and</em> Lecture A. The grey boxes are topics that are planned but not yet part of these notes; they show where the branches are meant to meet again.</p>
+<figure id="fig:readingmap">
+<img src="figs/00_fig1.svg" style="width:732px" alt="" />
+<figcaption><strong>Figure 1.</strong> Reading map. Solid arrows: “is needed for”. Red: a lecture that needs two others (C needs B and 4; D needs 5 and A). Dashed coloured arrows: places where one can change from one branch to another, coloured by the branch one leaves. Grey: planned topics, not yet part of these notes. Each exercise carries the number or letter of its lecture (Exercise 2, 5, 6, A, D); Supplements S1, S2 and Exercises B1 to B3 belong to Lecture B.</figcaption>
+</figure>
+<h2 class="unnumbered" id="companion-exercises">Companion exercises</h2>
+<p>The exercises are Jupyter notebooks, distributed with these notes. They contain gaps (<code>...</code>) to fill in and a self-check cell after each part. Each exercise is named after the lecture it accompanies.</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>exercise</strong></th>
+<th style="text-align: left;"><strong>companion to</strong></th>
+<th style="text-align: left;"><strong>content</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Exercise 2</td>
+<td style="text-align: left;">Lecture 2</td>
+<td style="text-align: left;">steady heat conduction: from physical relations to a 1D finite element solver</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise 5</td>
+<td style="text-align: left;">Lecture 5</td>
+<td style="text-align: left;">a small explicit dynamics code: modes, stability limit, a travelling wave, modal truncation</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise 6</td>
+<td style="text-align: left;">Lecture 6</td>
+<td style="text-align: left;">a small nonlinear solver: Newton, tangent checks, load steps, displacement control, contact</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise A</td>
+<td style="text-align: left;">Lecture A</td>
+<td style="text-align: left;">regression, residual versus error, gradient descent, a tiny neural network, overfitting</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise B1</td>
+<td style="text-align: left;">Lecture B, S1</td>
+<td style="text-align: left;">PINNs at hand scale: forward and inverse, ending in damage detection</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise B2</td>
+<td style="text-align: left;">Lecture B, S2</td>
+<td style="text-align: left;">a physics-augmented material network, checked by hand and used in a solver</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise B3</td>
+<td style="text-align: left;">Lectures 2, B</td>
+<td style="text-align: left;">transfer to new equations: cooling fin, beam, eigenvalue problem</td>
+</tr>
+<tr>
+<td style="text-align: left;">Exercise D</td>
+<td style="text-align: left;">Lecture D</td>
+<td style="text-align: left;">model reduction: a POD routine, reduced models by projection and by regression, a travelling front; optional 2D part</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The notebooks need Python with <code>numpy</code>, <code>sympy</code> and <code>matplotlib</code>; no machine-learning framework is required — every network in these notes is small enough to be written out in a few lines of <code>numpy</code>.</p>
+<h2 class="unnumbered" id="a-word-on-style">A word on style</h2>
+<p>We follow one rule throughout: <em>never more than one new idea per step, and every idea first on the smallest example that shows it.</em> Where a general formula appears, you have already computed its 2-node or 3-node special case by hand. If at any point a formula looks opaque, go back one example; the formula is only the example with the numbers renamed.</p>
+<h2 class="unnumbered" id="about-these-notes">About these notes</h2>
+<p>These lecture notes are based on earlier drafts that were left unfinished and set aside due to a lack of time. They were revived with extensive use of AI, in particular Claude Code with Anthropic’s Claude Opus and Claude Fable models, which generated and rewrote text, figures and code under the author’s direction. The author is responsible for the content, and errors may remain. Please let me know about any errors, bugs or mistakes you find, and about suggestions for improvement or your experience of learning with these notes; the contact address is given on the course website.</p>
+<p><span>Copyright © 2025 Ramses Sala.</span></p>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="01_springs_and_stiffness.html">Lecture 1 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

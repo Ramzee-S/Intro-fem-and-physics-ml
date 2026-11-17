@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exercise 2: Steady Heat Conduction — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="02_boundary_value_problem.html">← Lecture 2</a> <a href="03_trusses_in_the_plane.html">Lecture 3 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">&nbsp;</p>
+<h1>Exercise 2: Steady Heat Conduction</h1>
+<p>The claim at the end of Lecture 2 was that the derivation steps are general, the symbols incidental. This exercise makes you prove it to yourself: you will rebuild the entire arc of Lecture 2 — balance law, boundary value problem, collocation, Galerkin, shape functions, element matrices, assembly — for the steady temperature field in a rod. A guided Jupyter notebook accompanies the exercise (<code>Exercise_2_Heat_FEM.ipynb</code>); it follows the same path as the tasks below, grouped into slightly different parts.</p>
+<h2 class="unnumbered" id="the-physics-kit">The physics kit</h2>
+<p>A rod of length <span class="math inline">\(L\)</span> and cross-section <span class="math inline">\(A\)</span>, insulated on its lateral surface so heat flows only along <span class="math inline">\(x\)</span> (Fig. <a href="02x_exercise_heat_conduction.html#fig:thermalrod">2.8</a>). Unknown: the temperature field <span class="math inline">\(T(x)\)</span>. Available relations — the four you need (the notebook mixes in a few distractors):</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>relation</strong></th>
+<th style="text-align: left;"><strong>formula</strong></th>
+<th style="text-align: left;"><strong>role</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">(a)</td>
+<td style="text-align: left;">temperature gradient</td>
+<td style="text-align: left;"><span class="math inline">\(g = \dfrac{\mathrm{d}T}{\mathrm{d}x}\)</span></td>
+<td style="text-align: left;">“kinematics”</td>
+</tr>
+<tr>
+<td style="text-align: left;">(b)</td>
+<td style="text-align: left;">Fourier’s law</td>
+<td style="text-align: left;"><span class="math inline">\(q = -\lambda\, g\)</span></td>
+<td style="text-align: left;">material law</td>
+</tr>
+<tr>
+<td style="text-align: left;">(c)</td>
+<td style="text-align: left;">heat-flow resultant</td>
+<td style="text-align: left;"><span class="math inline">\(Q = A\,q\)</span></td>
+<td style="text-align: left;">cross-section bundling</td>
+</tr>
+<tr>
+<td style="text-align: left;">(d)</td>
+<td style="text-align: left;">steady heat balance of a slice</td>
+<td style="text-align: left;"><span class="math inline">\(\dfrac{\mathrm{d}Q}{\mathrm{d}x} = s(x)\)</span></td>
+<td style="text-align: left;">balance</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Here <span class="math inline">\(\lambda\)</span> is the thermal conductivity (W/(m K)), <span class="math inline">\(q\)</span> the heat flux (W/m<span class="math inline">\(^2\)</span>, positive in <span class="math inline">\(+x\)</span>), and <span class="math inline">\(s(x)\)</span> a distributed heat source per unit length (W/m) — electrical heating, say. The minus sign in (b) is physics: heat flows from hot to cold, <em>down</em> the gradient. For the bar the minus sign sat in the balance (<span class="math inline">\(N&#39; = -n\)</span>); here it sits in the material law.</p>
+<figure id="fig:thermalrod">
+<img src="figs/02x_fig1.svg" style="width:537px" alt="" />
+<figcaption><strong>Figure 2.8.</strong> Steady heat conduction in a rod: prescribed temperature at the left, prescribed heat flow <span class="math inline">\(Q(L)=\bar Q\)</span> at the right (positive = outflow in <span class="math inline">\(+x\)</span>), distributed source along the length.</figcaption>
+</figure>
+<h2 class="unnumbered" id="tasks">Tasks</h2>
+<ol>
+<li><p><strong>Build the differential equation.</strong> Chain the relations (a)–(d) in the right order — draw the square diagram in the style of Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a> first — and derive <span class="math display">\[\frac{\mathrm{d}}{\mathrm{d}x}\!\left(\lambda A \frac{\mathrm{d}T}{\mathrm{d}x}\right) + s(x) = 0 .\]</span> Compare term by term with <a href="02_boundary_value_problem.html#eq:strongode">(2.5)</a>: which quantity plays <span class="math inline">\(u\)</span>? which plays <span class="math inline">\(N\)</span>? which plays <span class="math inline">\(EA\)</span>? Where did the minus sign of Fourier’s law go?</p></li>
+<li><p><strong>State the boundary value problem.</strong> Domain, strong form, and the admissible boundary conditions. What is the thermal meaning of an <em>essential</em> condition? Of a <em>natural</em> one? Of a <em>homogeneous natural</em> one? (The last is a perfectly insulated end — the thermal twin of a free bar end.) Convince yourself the “one of each conjugate pair <span class="math inline">\((T, Q)\)</span> per boundary point, at least one <span class="math inline">\(T\)</span> somewhere” rule holds — what would it physically mean if <em>both</em> ends only prescribed flux?</p></li>
+<li><p><strong>Reference solution.</strong> For constant <span class="math inline">\(\lambda A\)</span>, constant source <span class="math inline">\(s_0\)</span>, <span class="math inline">\(T(0)=\bar T\)</span>, insulated right end (<span class="math inline">\(Q(L) = 0\)</span>), solve the BVP exactly by integrating twice.</p></li>
+<li><p><strong>Collocation.</strong> With the ansatz <span class="math inline">\(\tilde T = \bar T + a_1 x(2L - x)\)</span> (why does it satisfy both the essential condition at <span class="math inline">\(x=0\)</span> and, conveniently, <span class="math inline">\(\tilde T&#39;(L)=0\)</span>?), compute the residual and collocate; compare with task 3.</p></li>
+<li><p><strong>Galerkin.</strong> Same ansatz, Galerkin weighting, weak form. Verify you reproduce the exact solution and explain why (Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a> principle). Then switch to a linear source <span class="math inline">\(s = s_0 x/L\)</span>: now collocation and Galerkin differ. Which is closer to the exact cubic?</p></li>
+<li><p><strong>Element matrices.</strong> With hat functions on an element of length <span class="math inline">\(h\)</span>, show <span class="math display">\[\mathbf{k}^e = \frac{\lambda A}{h}\begin{bmatrix}1&amp;-1\\-1&amp;1\end{bmatrix},
+        \qquad
+        \mathbf{f}^e = \frac{s_0 h}{2}\begin{bmatrix}1\\1\end{bmatrix}.\]</span> You may copy the Lecture 2 computation symbol for symbol. That is the point.</p></li>
+<li><p><strong>Assemble and solve.</strong> Four elements, non-uniform if you dare; impose <span class="math inline">\(T(0)=\bar T\)</span> by partitioning <a href="01_springs_and_stiffness.html#eq:solve">(1.5)</a>; solve; plot against task 3; check nodal exactness. Then re-solve with a second load case (different <span class="math inline">\(s\)</span>, heated tip) without re-assembling <span class="math inline">\(\mathbf{K}\)</span>.</p></li>
+<li><p><strong>Only now: the intuitive picture.</strong> Each element acts as a <em>thermal resistor</em> between its nodes, conductance <span class="math inline">\(\lambda A/h\)</span> — the heat-flow analogue of the spring. Electrical network intuition (conductances in series, Kirchhoff balance at nodes) would have given you <span class="math inline">\(\mathbf{k}^e\)</span> in one line.</p></li>
+</ol>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p>We ran the thermal problem in the <em>opposite</em> order to the mechanical one: the formal derivation first, the intuitive picture last. For the bar, the picture (springs) came first and the derivation confirmed it; here you experience that the formal machinery works even <em>before</em> you possess any intuition — which is precisely the situation you will be in for every new physics you meet from now on. The derivation is the method; the intuitive picture is the bonus.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="02_boundary_value_problem.html">← Lecture 2</a> <a href="03_trusses_in_the_plane.html">Lecture 3 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

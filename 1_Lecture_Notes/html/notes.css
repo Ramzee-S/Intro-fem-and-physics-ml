@@ -1,0 +1,41 @@
+
+:root { --paper:#FBFCFD; --ink:#1F2E52; --text:#22262E; --muted:#5B6472; --force:#B3261E;
+        --opt:#5E3F8F; --exer:#B4610E; --rule:#D9DFE8;
+        --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body { margin:0; color:var(--text); font:18px/1.62 var(--serif); }
+main { max-width:46rem; margin:0 auto; padding:1.2rem 1.25rem 3rem; }
+nav.top, nav.bottom { display:flex; flex-wrap:wrap; gap:.4rem 1.2rem; justify-content:space-between;
+      font-size:.92rem; padding:.6rem 0; border-bottom:1px solid var(--rule); }
+nav.bottom { border-bottom:0; border-top:1px solid var(--rule); margin-top:3rem; }
+a { color:var(--force); text-decoration-thickness:1px; text-underline-offset:3px; }
+.kicker { color:var(--muted); font-weight:700; margin:2.2rem 0 .2rem; letter-spacing:.02em; }
+h1 { font-size:2.3rem; line-height:1.12; color:var(--ink); margin:0 0 1.4rem; }
+h2 { font-size:1.4rem; color:var(--ink); margin:2.6rem 0 .7rem; padding-bottom:.2rem; border-bottom:2px solid var(--ink); }
+h3 { font-size:1.15rem; color:var(--ink); margin:1.8rem 0 .5rem; }
+h4, h5 { font-size:1rem; margin:1.3rem 0 .2rem; color:var(--ink); }
+p { margin:.5rem 0 .9rem; }
+code, tt { font-family:var(--mono); font-size:.82em; }
+figure { margin:1.6rem 0; text-align:center; }
+figure img, p > img, .center img { max-width:100%; height:auto; }
+figcaption { font-size:.92rem; color:var(--muted); text-align:left; margin-top:.5rem; }
+.center { text-align:center; overflow-x:auto; }
+table { border-collapse:collapse; margin:.8rem auto; font-size:.93rem; text-align:left; }
+th, td { padding:.22rem .7rem; vertical-align:top; }
+thead th { border-bottom:1.5px solid var(--ink); }
+tbody tr:last-child td { border-bottom:1px solid var(--rule); }
+.math.display { display:block; overflow-x:auto; overflow-y:hidden; padding:.15rem 0; }
+.keyidea, .sidenote, .ahead, .recipe, .exercisebox, .bridge, .design {
+      border:1.5px solid; border-radius:4px; margin:1.3rem 0; padding:0 .9rem .3rem; }
+.boxtitle { margin:0 -.9rem .5rem; padding:.2rem .9rem; font-weight:700; color:#fff; }
+.boxtitle p { margin:0; }
+.keyidea { border-color:#2E3F8F; background:#F3F5FC; } .keyidea > .boxtitle { background:#2E3F8F; }
+.sidenote { border-color:#737780; background:#F5F5F6; } .sidenote > .boxtitle { background:#737780; }
+.ahead { border-color:#2F6B2F; background:#F4FAF3; } .ahead > .boxtitle { background:#2F6B2F; }
+.recipe, .design { border-color:#B4610E; background:#FDF6EE; } .recipe > .boxtitle, .design > .boxtitle { background:#B4610E; }
+.exercisebox { border-color:#5E3F8F; background:#F7F4FB; } .exercisebox > .boxtitle { background:#5E3F8F; }
+.bridge { border:1.5px dashed #2E3F8F; background:#F6F8FD; } .bridge > .boxtitle { background:#DDE3F6; color:#1F2E52; }
+footer { margin-top:1.5rem; font-size:.85rem; color:var(--muted); }
+@media (max-width:520px) { body { font-size:16.5px; } h1 { font-size:1.8rem; } }

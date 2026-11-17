@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Reduction with POD — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="C_pinns_in_two_dimensions.html">← Lecture C</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture D</p>
+<h1>Model Reduction with POD</h1>
+<p><em>This lecture builds on Lecture 5 (modes, time stepping) and uses the least squares of Lecture A. It answers the question on which Exercises 5 and 6 ended.</em></p>
+<h2 id="d.1-a-table-of-solutions-and-a-suspicion">D.1   A table of solutions, and a suspicion</h2>
+<p>A simulation does not produce one answer; it produces a table. The explicit time stepper of Lecture 5, run on a bar of 20 elements after a sudden end load, delivers the displacement of 20 nodes at 178 instants: a matrix of <span class="math inline">\(20\times178 = 3560\)</span> numbers, one column per instant. Such a matrix of computed states is called a <em>snapshot matrix</em>, <span class="math display">\[\mathbf{S} = \begin{bmatrix} \mathbf{u}^{(1)} &amp; \mathbf{u}^{(2)} &amp; \cdots &amp; \mathbf{u}^{(n)} \end{bmatrix}.\]</span> The columns may belong to instants of time, as here, or to load levels, or to values of a design parameter — any family of solutions of one model.</p>
+<p>Now look at the columns (Fig. <a href="D_model_reduction_pod.html#fig:pod-snap">D.1</a>). They are not 178 unrelated shapes. They resemble one another; later ones nearly repeat earlier ones. The suspicion is hard to avoid: <em>this table holds far fewer than 3560 numbers’ worth of information.</em> If a handful of shapes, mixed in different amounts, described every column, we could store the table cheaply — and, more ambitiously, <em>compute</em> with the handful instead of the 20.</p>
+<figure id="fig:pod-snap">
+<img src="figs/D_fig1.svg" style="width:435px" alt="" />
+<figcaption><strong>Figure D.1.</strong> Five of the 178 columns of the snapshot matrix: the displacement along the bar at five instants after a sudden end load (units of Lecture 5: <span class="math inline">\(EA=\rho A=L=F=1\)</span>). Solid: on the way up; dashed: on the way back. The columns look alike.</figcaption>
+</figure>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>What the small examples are for.</strong> Everything in this lecture is toy-sized on purpose: three springs, a bar of 20 elements. At this size you can compute each step by hand or in a few lines, and see <em>what the method does and how it is built</em>. You cannot see a <em>need</em> for it: a model with 20 unknowns is solved faster than it is reduced, and the classical methods of the earlier lectures do the same job exactly. Model reduction earns its keep on large models that must be solved many times; that argument is made in the literature named at the end. Here we want the structure.</p>
+</div>
+<h2 id="sec:pod-rank1">D.2   One shape: a matrix of rank one</h2>
+<p>Start where the suspicion is plainly true. Take a chain of three unit springs, fixed at the left (Lecture 1), and pull at its free end with a force <span class="math inline">\(F\)</span>. The three nodes move by <span class="math inline">\(\mathbf{u} = F\,[\,1\ \ 2\ \ 3\,]^{\mathsf{T}}\)</span>: each spring stretches by <span class="math inline">\(F\)</span>, and the stretches add up along the chain. Solve for three load levels, <span class="math inline">\(F = 1, 2, 3\)</span>, and collect the solutions as columns: <span class="math display">\[\mathbf{S} = \begin{bmatrix} 1 &amp; 2 &amp; 3\\ 2 &amp; 4 &amp; 6\\ 3 &amp; 6 &amp; 9\end{bmatrix}
+  = \begin{bmatrix}1\\2\\3\end{bmatrix}\begin{bmatrix}1 &amp; 2 &amp; 3\end{bmatrix} .\]</span> Nine numbers, but only one <em>shape</em>, <span class="math inline">\([1\ 2\ 3]^{\mathsf{T}}\)</span>, taken in three <em>amounts</em>, <span class="math inline">\(1, 2, 3\)</span>. Six numbers say it all — and for a model with a million nodes and a thousand load levels the same bookkeeping would replace <span class="math inline">\(10^9\)</span> numbers by a million and a thousand. A matrix that is one column times one row is said to have <em>rank one</em>.</p>
+<p>It is convenient to give the shape length one. Since <span class="math inline">\(\sqrt{1^2+2^2+3^2} = \sqrt{14}\)</span>, <span class="math display">\[\mathbf{S} = \sigma\,\boldsymbol{\phi}\,\mathbf{v}^{\mathsf{T}},
+  \qquad
+  \boldsymbol{\phi }= \tfrac{1}{\sqrt{14}}\begin{bmatrix}1\\2\\3\end{bmatrix},\quad
+  \mathbf{v} = \tfrac{1}{\sqrt{14}}\begin{bmatrix}1\\2\\3\end{bmatrix},\quad
+  \sigma = 14 .\]</span> A unit shape <span class="math inline">\(\boldsymbol{\phi}\)</span> along the structure, a unit pattern <span class="math inline">\(\mathbf{v}\)</span> across the snapshots, and one number <span class="math inline">\(\sigma\)</span> that carries all the size. Remember the three roles; nothing more will be added, only repeated.</p>
+<h2 id="sec:pod-svd">D.3   Almost one shape: the decomposition by hand</h2>
+<p>Real tables are never exactly rank one. Take the same chain with two <em>different</em> loads: a unit force at the end, and a unit force at the middle node. The second gives <span class="math inline">\(\mathbf{u} = [\,1\ \ 2\ \ 2\,]^{\mathsf{T}}\)</span> (the last spring carries nothing and rides along). So <span class="math display">\[\mathbf{S} = \begin{bmatrix} 1 &amp; 1\\ 2 &amp; 2\\ 3 &amp; 2\end{bmatrix}.\]</span> Two columns, not multiples of each other — but close. Which single shape describes both best, and how much is lost?</p>
+<p>“Best” needs a measure, and we take the one of Lecture A: least squares. Find the unit shape <span class="math inline">\(\boldsymbol{\phi}\)</span> and amounts <span class="math inline">\(a_1, a_2\)</span> such that the sum of squares of all entries of <span class="math inline">\(\mathbf{S} - \boldsymbol{\phi}\,[a_1\ a_2]\)</span> is as small as possible. The result of that minimization is a small eigenvalue problem, the same animal as in Section <a href="05_mass_damping_and_time.html#sec:modes">5.5</a>: <span id="eq:pod-eig"></span><span class="math display">\[\bigl(\mathbf{S}^{\mathsf{T}}\mathbf{S}\bigr)\,\mathbf{v} = \sigma^2\,\mathbf{v} .
+  
+\tag{D.1}\]</span> The matrix <span class="math inline">\(\mathbf{S}^{\mathsf{T}}\mathbf{S}\)</span> contains the dot products of the snapshots with one another — it measures how alike they are.</p>
+<h5 id="by-hand.">By hand.</h5>
+<p><span class="math display">\[\mathbf{S}^{\mathsf{T}}\mathbf{S} = \begin{bmatrix} 14 &amp; 11\\ 11 &amp; 9\end{bmatrix},
+  \qquad
+  \det\begin{bmatrix} 14-\sigma^2 &amp; 11\\ 11 &amp; 9-\sigma^2\end{bmatrix}
+  = \sigma^4 - 23\,\sigma^2 + 5 = 0\]</span> <span class="math display">\[\Longrightarrow\quad \sigma_1^2 = 22.78,\quad \sigma_2^2 = 0.22,
+  \qquad \sigma_1 = 4.77,\quad \sigma_2 = 0.47 .\]</span> For <span class="math inline">\(\sigma_1\)</span> the first row of <a href="D_model_reduction_pod.html#eq:pod-eig">(D.1)</a> gives <span class="math inline">\(\mathbf{v}_1 = [\,0.781\ \ 0.624\,]^{\mathsf{T}}\)</span>, and the shape follows by applying <span class="math inline">\(\mathbf{S}\)</span> and dividing by <span class="math inline">\(\sigma_1\)</span>: <span class="math display">\[\boldsymbol{\phi}_1 = \frac{\mathbf{S}\,\mathbf{v}_1}{\sigma_1}
+  = \begin{bmatrix} 0.294\\ 0.589\\ 0.753\end{bmatrix},
+  \qquad
+  \sigma_1\boldsymbol{\phi}_1\mathbf{v}_1^{\mathsf{T}}=
+  \begin{bmatrix} 1.10 &amp; 0.88\\ 2.20 &amp; 1.75\\ 2.81 &amp; 2.24\end{bmatrix}
+  \ \text{ against }\
+  \begin{bmatrix} 1 &amp; 1\\ 2 &amp; 2\\ 3 &amp; 2\end{bmatrix}.\]</span> One shape — a compromise between <span class="math inline">\([1\ 2\ 3]\)</span> and <span class="math inline">\([1\ 2\ 2]\)</span> — reproduces both columns to within about ten percent. The second pair (<span class="math inline">\(\sigma_2\)</span>, <span class="math inline">\(\boldsymbol{\phi}_2\)</span>, <span class="math inline">\(\mathbf{v}_2\)</span>) repairs the rest exactly.</p>
+<p>Two checks, as always. The sum <span class="math inline">\(\sigma_1^2 + \sigma_2^2 = 23\)</span> equals the sum of the squares of all six entries of <span class="math inline">\(\mathbf{S}\)</span> (<span class="math inline">\(1+4+9+1+4+4\)</span>): the <span class="math inline">\(\sigma_i^2\)</span> <em>share out</em> the total content of the table. And the share of the first shape is <span class="math inline">\(22.78/23 = 99.0\,\%\)</span>.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Every snapshot matrix is a sum of rank-one pieces, sorted by importance:</strong> <span class="math display">\[\mathbf{S} = \sigma_1\,\boldsymbol{\phi}_1\mathbf{v}_1^{\mathsf{T}}+ \sigma_2\,\boldsymbol{\phi}_2\mathbf{v}_2^{\mathsf{T}}+ \dots
+  \qquad \sigma_1 \ge \sigma_2 \ge \dots \ge 0 .\]</span> The shapes <span class="math inline">\(\boldsymbol{\phi}_i\)</span> are perpendicular to one another and of unit length; so are the patterns <span class="math inline">\(\mathbf{v}_i\)</span>. Stopping after <span class="math inline">\(r\)</span> terms gives the <em>best</em> approximation of <span class="math inline">\(\mathbf{S}\)</span> by <span class="math inline">\(r\)</span> shapes in the least-squares sense, and what is lost is exactly <span class="math inline">\(\sigma_{r+1}^2 + \sigma_{r+2}^2 + \dots\)</span>  This is the <em>singular value decomposition</em> (SVD), <span class="math inline">\(\mathbf{S} = \boldsymbol{\Phi}\,\boldsymbol{\Sigma}\,\mathbf{V}^{\mathsf{T}}\)</span>; the <span class="math inline">\(\sigma_i\)</span> are the <em>singular values</em>. Applied to snapshots it is called <em>proper orthogonal decomposition</em> (POD), and the <span class="math inline">\(\boldsymbol{\phi}_i\)</span> are the POD shapes.</p>
+</div>
+<p>For anything larger than our <span class="math inline">\(3\times2\)</span> table nobody solves <a href="D_model_reduction_pod.html#eq:pod-eig">(D.1)</a> by hand; the SVD is a library routine (<code>numpy.linalg.svd</code>). What remains for the user is one decision: where to stop. The usual rule keeps the smallest <span class="math inline">\(r\)</span> for which <span id="eq:pod-energy"></span><span class="math display">\[\frac{\sigma_1^2 + \dots + \sigma_r^2}{\sigma_1^2 + \sigma_2^2 + \dots} \;\ge\; 1 - \epsilon ,
+  
+\tag{D.2}\]</span> with, say, <span class="math inline">\(\epsilon = 10^{-2}\)</span> or <span class="math inline">\(10^{-3}\)</span>. The left side is commonly called the “energy” captured by <span class="math inline">\(r\)</span> shapes. It is a sum of squares, not joules — a name, not a physical energy.</p>
+<h2 id="sec:pod-modes">D.4   POD shapes and vibration modes</h2>
+<p>Back to the bar of Fig. <a href="D_model_reduction_pod.html#fig:pod-snap">D.1</a>. The SVD of its <span class="math inline">\(20\times178\)</span> snapshot matrix gives <span class="math display">\[\sigma_1,\dots,\sigma_4 = 43.4,\ \ 3.68,\ \ 1.22,\ \ 0.60,
+  \qquad\text{shares: } 99.2\,\%,\ 0.7\,\%,\ 0.08\,\%,\ 0.02\,\% .\]</span> The suspicion was right: one shape carries almost everything, three carry <span class="math inline">\(99.97\,\%\)</span>.</p>
+<p>But we have decomposed this bar’s motion into shapes before. In Section <a href="05_mass_damping_and_time.html#sec:modes">5.5</a> the shapes were the vibration <em>modes</em>, and Exercise 5 expanded this very response in them. Fig. <a href="D_model_reduction_pod.html#fig:pod-modes">D.2</a> puts the two families side by side.</p>
+<figure id="fig:pod-modes">
+<img src="figs/D_fig2.svg" style="width:625px" alt="" />
+<figcaption><strong>Figure D.2.</strong> The first three POD shapes of the snapshot matrix (blue) and the first three vibration modes of the bar (dashed), all scaled to unit length. Relatives, not twins.</figcaption>
+</figure>
+<p>They are clearly related, and clearly not the same. Three observations explain both.</p>
+<p><em>The first POD shape is nearly a straight line.</em> A suddenly loaded bar swings about its <em>static</em> deflection, and the static deflection under an end force is the straight line <span class="math inline">\(u = Fx/EA\)</span>. Most of every snapshot is that line; POD puts it first. (The angle between <span class="math inline">\(\boldsymbol{\phi}_1\)</span> and the straight line is about <span class="math inline">\(2^\circ\)</span>.) The first vibration mode is a quarter sine wave instead — it knows nothing of this load.</p>
+<p><em>Without a load, POD finds the modes.</em> Release the two-mass chain of Section <a href="05_mass_damping_and_time.html#sec:modes">5.5</a> from some initial displacement and record a long stretch of its free vibration. Its motion is <span class="math inline">\(q_1(t)\,\boldsymbol{\phi}^{(1)} + q_2(t)\,\boldsymbol{\phi}^{(2)}\)</span> with two cosines of different frequency. In <span class="math inline">\(\mathbf{S}^{\mathsf{T}}\mathbf{S}\)</span> — or rather its sibling <span class="math inline">\(\mathbf{S}\mathbf{S}^{\mathsf{T}}\)</span>, which has the POD shapes as eigenvectors — the products <span class="math inline">\(q_1 q_2\)</span> of two different cosines average out over time, and what remains is “mode 1 times mode 1 plus mode 2 times mode 2”. If the masses are equal, the modes are perpendicular in the ordinary sense, and that sum <em>is</em> the decomposition of the key-idea box. Indeed: the SVD of such a record returns <span class="math inline">\([\,0.526\ \ 0.851\,]^{\mathsf{T}}\)</span>, which is the mode <span class="math inline">\([\,0.618\ \ 1\,]^{\mathsf{T}}\)</span> of Lecture 5 scaled to unit length.</p>
+<p><em>The two families are sorted differently.</em> Modes are sorted by frequency: a property of the structure. POD shapes are sorted by how much of <em>these snapshots</em> they carry: a property of the data.</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">relative error of the response with <span class="math inline">\(r\)</span> shapes</th>
+<th style="text-align: center;"><span class="math inline">\(r=1\)</span></th>
+<th style="text-align: center;">2</th>
+<th style="text-align: center;">3</th>
+<th style="text-align: center;">6</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">first <span class="math inline">\(r\)</span> vibration modes (Exercise 5)</td>
+<td style="text-align: center;"><span class="math inline">\(12.5\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(5.3\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(3.1\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.3\,\%\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">first <span class="math inline">\(r\)</span> POD shapes</td>
+<td style="text-align: center;"><span class="math inline">\(\phantom{0}9.1\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(3.4\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.8\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.7\,\%\)</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>POD wins every column, and must: by the key idea no <span class="math inline">\(r\)</span> shapes can do better <em>on these snapshots</em>. That is also the catch. Modes come from the model and serve every load; POD shapes come from the data and are tailored to the load that produced them.</p>
+<h2 id="sec:pod-galerkin">D.5   First use: Galerkin projection</h2>
+<p>So far we have only compressed a table that already existed. The more interesting step: use the shapes to <em>compute</em> new solutions cheaply.</p>
+<p>Recall the single most important move of Lecture 2 (Section <a href="02_boundary_value_problem.html#sec:ansatz">2.5</a>): do not search among all functions; choose a family described by a few numbers and search there. We do exactly that, one level up. The unknown is no longer a function but a vector of nodal displacements, and the family is <span id="eq:pod-ansatz"></span><span class="math display">\[\mathbf{u} \;\approx\; a_1\,\boldsymbol{\phi}_1 + \dots + a_r\,\boldsymbol{\phi}_r = \boldsymbol{\Phi}\,\mathbf{a} ,
+  
+\tag{D.3}\]</span> with the POD shapes as columns of <span class="math inline">\(\boldsymbol{\Phi}\)</span> and only <span class="math inline">\(r\)</span> unknown amounts <span class="math inline">\(\mathbf{a}\)</span>. Insert this into <span class="math inline">\(\mathbf{K}\mathbf{u} = \mathbf{f}\)</span>: we get <span class="math inline">\(n\)</span> equations for <span class="math inline">\(r\)</span> unknowns, too many. Galerkin’s answer (Section <a href="02_boundary_value_problem.html#sec:galerkin">2.8</a>) was to weigh the residual with the ansatz functions themselves; here that means multiplying from the left by <span class="math inline">\(\boldsymbol{\Phi}^{\mathsf{T}}\)</span>: <span id="eq:pod-rom"></span><span class="math display">\[\underbrace{\boldsymbol{\Phi}^{\mathsf{T}}\mathbf{K}\,\boldsymbol{\Phi}}_{\textstyle\mathbf{K}_r\ (r\times r)}\,\mathbf{a}
+  \;=\; \underbrace{\boldsymbol{\Phi}^{\mathsf{T}}\mathbf{f}}_{\textstyle\mathbf{f}_r} ,
+  
+\tag{D.4}\]</span> and in dynamics, in the same way, <span class="math inline">\(\mathbf{M}_r\,\ddot{\mathbf{a}} + \mathbf{K}_r\,\mathbf{a} = \mathbf{f}_r(t)\)</span> with <span class="math inline">\(\mathbf{M}_r = \boldsymbol{\Phi}^{\mathsf{T}}\mathbf{M}\,\boldsymbol{\Phi}\)</span>. Compare with <a href="02_boundary_value_problem.html#eq:KafGalerkin">(2.12)</a>: there <span class="math inline">\(K_{ij} = \int EA\,\varphi_i&#39;\varphi_j&#39;\,\mathrm{d}x\)</span> for functions we had <em>picked</em>, such as <span class="math inline">\(x(L-x)\)</span>; here <span class="math inline">\((\mathbf{K}_r)_{ij} = \boldsymbol{\phi}_i^{\mathsf{T}}\mathbf{K}\,\boldsymbol{\phi}_j\)</span> for shapes the <em>data</em> delivered. A reduced model is a Galerkin method whose shape functions were made by an SVD.</p>
+<h5 id="by-hand.-1">By hand.</h5>
+<p>The chain of three unit springs, <span class="math inline">\(\mathbf{K} = \left[\begin{smallmatrix}2&amp;-1&amp;0\\-1&amp;2&amp;-1\\0&amp;-1&amp;1\end{smallmatrix}\right]\)</span>, with the single shape of Section <a href="D_model_reduction_pod.html#sec:pod-rank1">D.2</a>, <span class="math inline">\(\boldsymbol{\phi }= [1\ 2\ 3]^{\mathsf{T}}\)</span> (the length does not matter here). Then <span class="math inline">\(\mathbf{K}\boldsymbol{\phi }= [0\ 0\ 1]^{\mathsf{T}}\)</span> and <span class="math inline">\(K_r = \boldsymbol{\phi}^{\mathsf{T}}\mathbf{K}\boldsymbol{\phi }= 3\)</span>: one equation, <span class="math inline">\(3a = \boldsymbol{\phi}^{\mathsf{T}}\mathbf{f}\)</span>.</p>
+<ul>
+<li><p>End load <span class="math inline">\(\mathbf{f} = [0\ 0\ F]^{\mathsf{T}}\)</span>: <span class="math inline">\(3a = 3F\)</span>, so <span class="math inline">\(\mathbf{u} = F\,[1\ 2\ 3]^{\mathsf{T}}\)</span> — exact. The truth lives in the family (the principle of Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a>), and Galerkin finds it.</p></li>
+<li><p>A load the shape has never seen, one unit on <em>every</em> node, <span class="math inline">\(\mathbf{f} = [1\ 1\ 1]^{\mathsf{T}}\)</span>: <span class="math inline">\(3a = 6\)</span>, so <span class="math inline">\(\mathbf{u} = [2\ 4\ 6]^{\mathsf{T}}\)</span>. The exact solution is <span class="math inline">\([3\ 5\ 6]^{\mathsf{T}}\)</span>. The reduced model is too stiff in the interior — a single straight shape cannot bend — and answers without any sign of doubt.</p></li>
+</ul>
+<h5 id="on-the-bar.">On the bar.</h5>
+<p>Project the 20-element bar on its first <span class="math inline">\(r\)</span> POD shapes and step <a href="D_model_reduction_pod.html#eq:pod-rom">(D.4)</a> through time with the central difference of Section <a href="05_mass_damping_and_time.html#sec:timestep">5.7</a> (Fig. <a href="D_model_reduction_pod.html#fig:pod-rom">D.3</a>).</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">number of shapes <span class="math inline">\(r\)</span></th>
+<th style="text-align: center;">1</th>
+<th style="text-align: center;">2</th>
+<th style="text-align: center;">3</th>
+<th style="text-align: center;">5</th>
+<th style="text-align: center;">8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">error of the reduced model</td>
+<td style="text-align: center;"><span class="math inline">\(21.6\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(11.2\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(5.3\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(2.3\,\%\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.2\,\%\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">largest stable time step <span class="math inline">\(2/\omega_{\max}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.22\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.39\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.24\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.13\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.084\)</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<figure id="fig:pod-rom">
+<img src="figs/D_fig3.svg" style="width:699px" alt="" />
+<figcaption><strong>Figure D.3.</strong> Tip displacement after the sudden end load: full model (grey) and Galerkin reduced models with one shape (dashed) and three shapes (blue). One shape is a single oscillator: a cosine. Three shapes begin to follow the sawtooth.</figcaption>
+</figure>
+<p>Three things to read off.</p>
+<p><em>The reduced model is worse than the table of Section <a href="D_model_reduction_pod.html#sec:pod-modes">D.4</a> promised</em> (<span class="math inline">\(5.3\,\%\)</span> against <span class="math inline">\(1.8\,\%\)</span> for three shapes). No contradiction: there we projected a solution we already had; here the reduced model has to find its own way through time, and its errors accumulate. The projection error is a floor, not a forecast.</p>
+<p><em>With one shape the bar becomes one mass on one spring</em>, with <span class="math inline">\(\omega = \sqrt{K_r/M_r} = 1.646\)</span>. The true lowest frequency of this mesh is <span class="math inline">\(1.570\)</span>. The estimate is too high, and that is a rule: forcing a structure into a shape that is not its mode can only stiffen it. (Readers who know the Rayleigh quotient have just met it again.)</p>
+<p><em>The stability limit moved.</em> The full model must respect <span class="math inline">\(\Delta t \le 0.050\)</span>, dictated by its highest, least trustworthy mode (Section <a href="05_mass_damping_and_time.html#sec:timestep">5.7</a>). The reduced models do not contain that mode; with three shapes, <span class="math inline">\(\Delta t = 0.2\)</span> is stable, and the run of 177 steps becomes 40, on 3 unknowns instead of 20. Reduction removes unknowns <em>and</em> the stiffest part of the dynamics.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Modal analysis is the same construction.</strong> Put the vibration modes into <span class="math inline">\(\boldsymbol{\Phi}\)</span> instead of the POD shapes, and <span class="math inline">\(\mathbf{K}_r\)</span> and <span class="math inline">\(\mathbf{M}_r\)</span> in <a href="D_model_reduction_pod.html#eq:pod-rom">(D.4)</a> come out <em>diagonal</em> — that was the orthogonality of Section <a href="05_mass_damping_and_time.html#sec:modes">5.5</a> — so the reduced equations fall apart into the independent oscillators of equation <a href="05_mass_damping_and_time.html#eq:modal">(5.7)</a>. Truncated modal analysis, the oldest reduced model in structural dynamics, is Galerkin projection on modes. POD replaces shapes derived from the model by shapes extracted from solutions; the projection is the same.</p>
+</div>
+<p>This route is called <em>intrusive</em>: to form <span class="math inline">\(\boldsymbol{\Phi}^{\mathsf{T}}\mathbf{K}\boldsymbol{\Phi}\)</span> one must have <span class="math inline">\(\mathbf{K}\)</span> — the model itself, opened up. In return the physics stays inside: the reduced model still balances forces, only in fewer directions.</p>
+<h2 id="sec:pod-regression">D.6   Second use: regression on the coefficients</h2>
+<p>Often the model cannot be opened: the snapshots come from a commercial program, or from measurements. Then the second route remains. Suppose the snapshots belong to values <span class="math inline">\(\mu_1, \mu_2, \dots\)</span> of a <em>parameter</em> — a stiffness, a load position, a thickness. Each snapshot has POD amounts <span class="math inline">\(\mathbf{a}(\mu_k) = \boldsymbol{\Phi}^{\mathsf{T}}\mathbf{u}^{(k)}\)</span>. Treat those as <em>data</em> and fit a function <span class="math inline">\(\mu \mapsto \mathbf{a}(\mu)\)</span> through them, with the regression of Lecture A. A new solution is then two cheap steps: evaluate the fitted function, multiply by <span class="math inline">\(\boldsymbol{\Phi}\)</span>. No <span class="math inline">\(\mathbf{K}\)</span> is ever assembled. The route is called <em>non-intrusive</em>.</p>
+<h5 id="by-hand.-2">By hand.</h5>
+<p>The three-spring chain once more, end load <span class="math inline">\(F=1\)</span>, but now the middle spring has stiffness <span class="math inline">\(\mu\)</span> instead of 1 (a weakened member, say). Springs in series: the stretches are <span class="math inline">\(1\)</span>, <span class="math inline">\(1/\mu\)</span>, <span class="math inline">\(1\)</span>, and adding up, <span class="math display">\[\mathbf{u}(\mu) = \begin{bmatrix}1\\ 1+1/\mu\\ 2+1/\mu\end{bmatrix}
+  = \begin{bmatrix}1\\1\\2\end{bmatrix} + \frac{1}{\mu}\begin{bmatrix}0\\1\\1\end{bmatrix} .\]</span> Every solution, for every <span class="math inline">\(\mu\)</span>, is a mixture of the <em>same two shapes</em>. Snapshots at <span class="math inline">\(\mu = \tfrac12, 1, 2\)</span>, namely <span class="math inline">\([1\ 3\ 4]\)</span>, <span class="math inline">\([1\ 2\ 3]\)</span>, <span class="math inline">\([1\ 1.5\ 2.5]\)</span>, therefore form a matrix of rank two: the third singular value is zero, and two POD shapes reproduce the whole family without error.</p>
+<p>What is left to learn is how the amounts depend on <span class="math inline">\(\mu\)</span> — and the formula above tells us: through <span class="math inline">\(1/\mu\)</span>. Now try two regressions on the three data points <span class="math inline">\((\mu, 1/\mu) = (\tfrac12, 2), (1, 1), (2, \tfrac12)\)</span>.</p>
+<ul>
+<li><p><em>A straight line in <span class="math inline">\(\mu\)</span></em>, the obvious first choice. The normal equations <a href="A_from_curve_fitting_to_neural_networks.html#eq:normal">(A.1)</a> give <span class="math inline">\(2.25 - 0.929\,\mu\)</span>. At the unseen value <span class="math inline">\(\mu = 0.75\)</span> it predicts <span class="math inline">\(1.55\)</span> where the truth is <span class="math inline">\(1.33\)</span>; at <span class="math inline">\(\mu = 4\)</span>, outside the data, it predicts <span class="math inline">\(-1.46\)</span> where the truth is <span class="math inline">\(+0.25\)</span>: a spring that gets <em>longer</em> when compressed.</p></li>
+<li><p><em>A straight line in <span class="math inline">\(1/\mu\)</span>.</em> Exact, for every <span class="math inline">\(\mu\)</span>, from two data points.</p></li>
+</ul>
+<p>The same data, the same least squares; one family contains the truth, the other does not, and no amount of fitting moves it there. It is the lesson of Lecture A, and of Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a> before it, in a new place. Knowing that flexibilities add — one line of mechanics — was worth more than more data.</p>
+<h5 id="on-the-bar.-1">On the bar.</h5>
+<p>A bar of 20 elements, fixed at the left, under a uniform distributed load, with a weakened zone <span class="math inline">\(0.4 &lt; x/L &lt; 0.6\)</span> of stiffness <span class="math inline">\(\mu\,EA\)</span>. Five snapshots, <span class="math inline">\(\mu = 0.2, 0.4, \dots, 1\)</span>; two POD shapes (again the third singular value vanishes); tested at 41 values of <span class="math inline">\(\mu\)</span> in the same range:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">reduced model with two POD shapes</th>
+<th style="text-align: center;">needs</th>
+<th style="text-align: center;">largest error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">regression, amounts linear in <span class="math inline">\(\mu\)</span></td>
+<td style="text-align: center;">snapshots only</td>
+<td style="text-align: center;"><span class="math inline">\(12\,\%\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">regression, amounts quadratic in <span class="math inline">\(\mu\)</span></td>
+<td style="text-align: center;">snapshots only</td>
+<td style="text-align: center;"><span class="math inline">\(6\,\%\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">regression, amounts linear in <span class="math inline">\(1/\mu\)</span></td>
+<td style="text-align: center;">snapshots only</td>
+<td style="text-align: center;">round-off</td>
+</tr>
+<tr>
+<td style="text-align: left;">Galerkin projection, equation <a href="D_model_reduction_pod.html#eq:pod-rom">(D.4)</a></td>
+<td style="text-align: center;">snapshots and <span class="math inline">\(\mathbf{K}(\mu)\)</span></td>
+<td style="text-align: center;">round-off</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Galerkin needs no advice about <span class="math inline">\(1/\mu\)</span>: it carries <span class="math inline">\(\mathbf{K}(\mu)\)</span> along, and the mechanics does the rest. Regression needs no model at all, and is exactly as good as the family of functions we offer it. Which route is right depends on what one has — a model that can be opened, or only its answers.</p>
+<h2 id="sec:pod-fails">D.7   Where it fails: things that move</h2>
+<p>All examples so far shared a hidden kindness: the solution changed its <em>size</em>, and a little of its form, but it stayed in place. Take a solution that travels instead.</p>
+<h5 id="by-hand.-3">By hand.</h5>
+<p>A short pulse runs along three nodes: first it sits on node 1, then on node 2, then on node 3. And a front that advances: first node 1 is reached, then 1 and 2, then all three. <span class="math display">\[\mathbf{S}_{\text{pulse}} = \begin{bmatrix}1&amp;0&amp;0\\0&amp;1&amp;0\\0&amp;0&amp;1\end{bmatrix},
+  \qquad
+  \mathbf{S}_{\text{front}} = \begin{bmatrix}1&amp;1&amp;1\\0&amp;1&amp;1\\0&amp;0&amp;1\end{bmatrix}.\]</span> The pulse matrix has <span class="math inline">\(\sigma_1 = \sigma_2 = \sigma_3 = 1\)</span>: every shape is exactly as important as every other, each carries a third, and nothing whatever can be dropped. Yet to the eye this is the simplest motion there is — <em>one</em> shape, shifted. That is precisely the difficulty: POD can <em>scale and add</em> shapes, it cannot <em>move</em> them. The front does little better: <span class="math inline">\(\sigma_i^2 = 5.05,\ 0.64,\ 0.31\)</span>, so the first shape carries <span class="math inline">\(84\,\%\)</span> — compare the <span class="math inline">\(99\,\%\)</span> of Section <a href="D_model_reduction_pod.html#sec:pod-svd">D.3</a>.</p>
+<h5 id="on-the-bar.-2">On the bar.</h5>
+<p>We have had a travelling front all along and did not notice. In the first moments after the sudden load, a wave front runs from the loaded end into the bar at speed <span class="math inline">\(c\)</span> (Exercise 5). Behind the front the material moves with constant <em>velocity</em>; ahead of it nothing has happened. The displacement, which Fig. <a href="D_model_reduction_pod.html#fig:pod-snap">D.1</a> showed, is the gentle integral of that picture — a ramp. The velocity is the front itself: a step. Take the SVD of both tables (Fig. <a href="D_model_reduction_pod.html#fig:pod-decay">D.4</a>).</p>
+<figure id="fig:pod-decay">
+<img src="figs/D_fig4.svg" style="width:499px" alt="" />
+<figcaption><strong>Figure D.4.</strong> Singular values of two snapshot tables of the same bar, on a logarithmic scale. Displacements (blue) fall away at once. The travelling velocity front (red) does not: its singular values form a plateau, and only the last few — shapes the mesh cannot resolve anyway — are small.</figcaption>
+</figure>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">shapes needed for <span class="math inline">\(99.9\,\%\)</span> in <a href="D_model_reduction_pod.html#eq:pod-energy">(D.2)</a></th>
+<th style="text-align: center;">20 elements</th>
+<th style="text-align: center;">50</th>
+<th style="text-align: center;">100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">displacements, whole run</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">3</td>
+</tr>
+<tr>
+<td style="text-align: left;">velocities while the front travels</td>
+<td style="text-align: center;">16</td>
+<td style="text-align: center;">37</td>
+<td style="text-align: center;">68</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The first row is what model reduction hopes for: refine the mesh, and the number of shapes stays put, because it belongs to the <em>solution</em> and not to the mesh. The second row is the failure in one line: refine the mesh, the front gets sharper, and the number of shapes grows with it. For a moving front the reduced model is hardly smaller than the full one.</p>
+<p>This limit is not a weakness of our example. It is shared by wave fronts, shocks, moving contact zones and cracks — by everything whose essential feature is <em>where</em> it is. Ways around it exist (shapes that are allowed to shift or deform, nonlinear combinations in place of sums) and are an active research field beyond this lecture; the references at the end are a starting point.</p>
+<div class="bridge">
+<div class="boxtitle">
+<p>Bridge to 2D (optional)</p>
+</div>
+<p>For readers who know the triangles of Lecture 4 and the heated plate of Lecture C (Section <a href="C_pinns_in_two_dimensions.html#sec:inverse2d">C.8</a>). Nothing in this lecture was tied to one dimension: a snapshot is a column of nodal values, whatever mesh they sit on. Solve the plate with an inclusion for 25 positions of the inclusion (linear triangles, <span class="math inline">\(20\times20\)</span> squares) and stack the temperature fields as columns. The first POD shape carries <span class="math inline">\(99.96\,\%\)</span> — and tells us almost nothing, because it is the temperature field of the plate <em>without</em> inclusion, common to all snapshots. Subtract that field first, and take the SVD of what the inclusion <em>changes</em>: now three shapes carry <span class="math inline">\(94\,\%\)</span> and eight are needed for <span class="math inline">\(99\,\%\)</span>. The inclusion is a thing that moves. The optional last part of Exercise D lets you compute and draw these shapes.</p>
+</div>
+<h2 id="sec:pod-closing">D.8   What the toys showed</h2>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>vibration modes (Lecture 5)</strong></th>
+<th style="text-align: left;"><strong>POD shapes (this lecture)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">come from</td>
+<td style="text-align: left;">the model: <span class="math inline">\(\mathbf{K}\)</span>, <span class="math inline">\(\mathbf{M}\)</span></td>
+<td style="text-align: left;">solutions: the snapshot matrix</td>
+</tr>
+<tr>
+<td style="text-align: left;">computed by</td>
+<td style="text-align: left;">an eigenvalue problem</td>
+<td style="text-align: left;">an SVD</td>
+</tr>
+<tr>
+<td style="text-align: left;">sorted by</td>
+<td style="text-align: left;">frequency</td>
+<td style="text-align: left;">share of the snapshots</td>
+</tr>
+<tr>
+<td style="text-align: left;">good for</td>
+<td style="text-align: left;">any load on this structure</td>
+<td style="text-align: left;">loads and parameters like those sampled</td>
+</tr>
+<tr>
+<td style="text-align: left;">perpendicular in the sense of</td>
+<td style="text-align: left;"><span class="math inline">\(\mathbf{M}\)</span> and <span class="math inline">\(\mathbf{K}\)</span></td>
+<td style="text-align: left;">the ordinary dot product</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>Galerkin projection</strong></th>
+<th style="text-align: left;"><strong>regression on the amounts</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">needs</td>
+<td style="text-align: left;">the snapshots and the model</td>
+<td style="text-align: left;">the snapshots only</td>
+</tr>
+<tr>
+<td style="text-align: left;">unknown amounts from</td>
+<td style="text-align: left;">reduced equations <span class="math inline">\(\mathbf{K}_r\mathbf{a} = \mathbf{f}_r\)</span></td>
+<td style="text-align: left;">a fitted function <span class="math inline">\(\mu\mapsto\mathbf{a}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">the physics is</td>
+<td style="text-align: left;">kept, in fewer directions</td>
+<td style="text-align: left;">only in the data</td>
+</tr>
+<tr>
+<td style="text-align: left;">as good as</td>
+<td style="text-align: left;">the shapes</td>
+<td style="text-align: left;">the shapes <em>and</em> the fitted family</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A last honest look at the examples. They were chosen to make the structure of the method visible and every number checkable: a table of solutions; a few shapes extracted from it by least squares; two ways to find the amounts for a new case; and one clear case in which the idea does not work. They were <em>not</em> chosen to show a gain. For three springs, or twenty elements, the full model is solved in less time than its SVD takes, and exactly. Whether a reduced model pays depends on how large the full model is, how often it must be solved, and how far the new cases lie from the sampled ones — questions of practice, treated in the literature below.</p>
+<h5 id="further-reading.">Further reading.</h5>
+<p>The best-approximation property of the SVD is due to Eckart &amp; Young (1936). Holmes, Lumley &amp; Berkooz (1996) is the classical book on POD, written for fluid flows. For reduced models of parametrized problems see the survey by Benner, Gugercin &amp; Willcox (2015) and the book by Hesthaven, Rozza &amp; Stamm (2016); for the limits of linear reduction on transport problems, Ohlberger &amp; Rave (2016).</p>
+<div class="exercisebox">
+<div class="boxtitle">
+<p>Companion exercise: Exercise D</p>
+</div>
+<p>Notebook <code>Exercise_D_Model_Reduction.ipynb</code>: you write a POD routine and check it against the hand examples of this lecture; decompose the snapshot matrix of your own time stepper and compare POD shapes with vibration modes; build a Galerkin reduced model and step it through time; build a regression model for the weakened bar and watch the choice of family decide its quality; and count the shapes a travelling front needs as the mesh is refined. An optional last part repeats the decomposition for the heated plate with an inclusion.</p>
+</div>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>One table of solutions deserves a second look. Load the three-spring chain with a unit force on node 1, then on node 2, then on node 3, and write the three solutions as columns: <span class="math inline">\([1\ 1\ 1]\)</span>, <span class="math inline">\([1\ 2\ 2]\)</span>, <span class="math inline">\([1\ 2\ 3]\)</span>. This snapshot matrix is nothing other than <span class="math inline">\(\mathbf{K}^{-1}\)</span> — and since every load is a sum of unit loads, it contains the answer to <em>all</em> of them. Its columns have a classical name, influence lines; and the question how few shapes describe them leads from model reduction to a newer subject: networks that learn the map from loads to solutions as a whole. That is the starting point of a planned lecture on learning operators.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="C_pinns_in_two_dimensions.html">← Lecture C</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

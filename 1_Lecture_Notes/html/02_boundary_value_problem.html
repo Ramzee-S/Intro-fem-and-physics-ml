@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elasticity as a Boundary Value Problem — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="01_springs_and_stiffness.html">← Lecture 1</a> <a href="02x_exercise_heat_conduction.html">Exercise 2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture 2</p>
+<h1>Elasticity as a Boundary Value Problem</h1>
+<h2 id="sec:why">2.1   Why a second perspective?</h2>
+<p>Lecture 1 needed hardly any calculus, and you may reasonably ask why we do not simply continue adding springs. Three reasons:</p>
+<ol>
+<li><p><strong>Distributed reality.</strong> Loads like self-weight act everywhere, cross-sections vary continuously, temperature fields exist at every point. A finite list of nodes does not describe this; a <em>function</em> <span class="math inline">\(u(x)\)</span> does. We need equipment for functions.</p></li>
+<li><p><strong>No intuition in 2D/3D.</strong> For a chain of springs you can <em>see</em> the element matrix. For a triangular patch of elastic material you cannot. We need a procedure that generates element matrices for us when drawing-based intuition runs out. (It will, in Lecture 4.)</p></li>
+<li><p><strong>Trust.</strong> If FEM is just clever bookkeeping, why should its answers approach the true ones as the mesh gets finer? Only a formulation with a differential equation lets us state such a question, and answer it.</p></li>
+</ol>
+<p>The plan of this lecture is a single long arc:</p>
+<div class="center">
+<p><span class="math inline">\(\text{physics}\;\to\;\text{differential equation}\;\to\;\text{boundary value problem}\;\to\;\text{ansatz}\;\to\;{}\)</span><br />
+<span class="math inline">\(\to\;\text{shape functions}\;\to\;\fbox{$\frac{EA}{h}\left[\begin{smallmatrix}1&amp;-1\\-1&amp;1\end{smallmatrix}\right]$}\)</span></p>
+</div>
+<p>The arc ends where Lecture 1 started. That is the point.</p>
+<h2 id="sec:ode">2.2   From physics to a differential equation</h2>
+<p>Our object: a straight elastic bar along the <span class="math inline">\(x\)</span>-axis, from <span class="math inline">\(x=0\)</span> to <span class="math inline">\(x=L\)</span>, cross-section <span class="math inline">\(A(x)\)</span>, Young’s modulus <span class="math inline">\(E(x)\)</span>, carrying a <em>distributed</em> axial load <span class="math inline">\(n(x)\)</span><a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> (units N/m — think of the self-weight of a hanging bar, <span class="math inline">\(n=\rho g A\)</span>). Unknown: the axial displacement field <span class="math inline">\(u(x)\)</span>.</p>
+<p>We build the governing equation from three ingredients, each one line of physics. Keep an eye on how cleanly they separate: one is balance, one is geometry, one is material. None of them knows about the other two — and, as we will stress again below, the order in which we meet them is a free choice. We start from the balance of forces, the statement closest to the statics you already know.</p>
+<h5 id="i-equilibrium-balance-of-forces.">(i) Equilibrium — balance of forces.</h5>
+<p>Cut a slice of <em>finite</em> length <span class="math inline">\(\Delta x\)</span> out of the bar (Fig. <a href="02_boundary_value_problem.html#fig:slice">2.1</a>) and list every force acting on it — all of them horizontal, because a bar carries axial loads only (a transverse distributed load is a <em>beam</em> problem, a different structural member with a different theory). The slice feels the internal force <span class="math inline">\(N(x)\)</span> pulling left at its left face, <span class="math inline">\(N(x+\Delta x)\)</span> pulling right at its right face, and its share of the distributed load, very nearly <span class="math inline">\(n(x)\,\Delta x\)</span> (force per length <span class="math inline">\(\times\)</span> length). Balance: <span class="math display">\[N(x+\Delta x) - N(x) + n(x)\,\Delta x = 0 .\]</span> Divide by <span class="math inline">\(\Delta x\)</span> and let the slice shrink: <span id="eq:equil"></span><span class="math display">\[\lim_{\Delta x\to 0}\frac{N(x+\Delta x) - N(x)}{\Delta x} + n(x) = 0
+  \qquad\Longrightarrow\qquad
+  \frac{\mathrm{d}N}{\mathrm{d}x} + n(x) = 0 .
+  
+\tag{2.1}\]</span></p>
+<figure id="fig:slice">
+<img src="figs/02_fig1.svg" style="width:385px" alt="" />
+<figcaption><strong>Figure 2.1.</strong> Equilibrium of a slice of finite length <span class="math inline">\(\Delta x\)</span>. Every arrow is horizontal: internal forces on the cut faces and the (axial!) distributed load <span class="math inline">\(n(x)\)</span>.</figcaption>
+</figure>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Why <span class="math inline">\(\Delta x\)</span> first and <span class="math inline">\(\mathrm{d}x\)</span> only afterwards?</strong> A drawing can only ever show a finite piece. Sketches labelled “<span class="math inline">\(\mathrm{d}x\)</span>” are shorthand for exactly the two moves we just made: draw a slice of finite length <span class="math inline">\(\Delta x\)</span>, write the physics for it, then let <span class="math inline">\(\Delta x \to 0\)</span> in the <em>equations</em>. Done this way, the limit is honest calculus — a difference quotient becoming a derivative — rather than arithmetic with “infinitely small” pictures. Once you have walked the long way a few times, you may read every <span class="math inline">\(\mathrm{d}x\)</span>-drawing in the literature (and later in these notes) as this shorthand.</p>
+</div>
+<h5 id="ii-kinematics-geometry-of-deformation.">(ii) Kinematics — geometry of deformation.</h5>
+<p>Now forget forces entirely and only watch shapes change. Take the same slice before and after deformation (Fig. <a href="02_boundary_value_problem.html#fig:strain">2.2</a>): the cross-section at <span class="math inline">\(x\)</span> moves right by <span class="math inline">\(u(x)\)</span>, the one at <span class="math inline">\(x+\Delta x\)</span> by <span class="math inline">\(u(x+\Delta x)\)</span>. The slice, originally <span class="math inline">\(\Delta x\)</span> long, ends up with length <span class="math inline">\(\Delta x + u(x+\Delta x) - u(x)\)</span>. Its <em>relative</em> elongation — elongation per unit of original length, the local cousin of Lecture 1’s elongation <span class="math inline">\(\Delta\)</span> — is therefore <span id="eq:kin"></span><span class="math display">\[\frac{\bigl[\Delta x + u(x{+}\Delta x) - u(x)\bigr] - \Delta x}{\Delta x}
+  = \frac{u(x{+}\Delta x) - u(x)}{\Delta x}
+  \;\xrightarrow{\;\Delta x \to 0\;}\;
+  \varepsilon(x) = \frac{\mathrm{d}u}{\mathrm{d}x},
+  
+\tag{2.2}\]</span> the <em>strain</em> — the same limit move as before. Sanity check: if <span class="math inline">\(u\)</span> is constant, the whole bar shifts rigidly and <span class="math inline">\(\varepsilon= 0\)</span> — the rigid body mode of Lecture 1, now wearing calculus. No material property appeared anywhere; this is pure geometry.</p>
+<figure id="fig:strain">
+<img src="figs/02_fig2.svg" style="width:451px" alt="" />
+<figcaption><strong>Figure 2.2.</strong> Kinematics of the same slice: both faces displace, by different amounts, so the slice stretches. Strain is the length change divided by the original length <span class="math inline">\(\Delta x\)</span>, then <span class="math inline">\(\Delta x \to 0\)</span>.</figcaption>
+</figure>
+<h5 id="iii-material-law.">(iii) Material law.</h5>
+<p>Experiment (Hooke): stress is proportional to strain, <span id="eq:mat"></span><span class="math display">\[\sigma(x) = E\,\varepsilon(x).
+  
+\tag{2.3}\]</span> This is the only place the material enters, and the only equation of the three that is approximate — a model of real material behavior, valid for small strains. Multiplying by the area gives the internal <em>normal force</em> carried by the cross-section: <span id="eq:resultant"></span><span class="math display">\[N(x) = A\,\sigma(x) = EA\,\varepsilon(x).
+  
+\tag{2.4}\]</span></p>
+<h5 id="combine.">Combine.</h5>
+<p>Insert the kinematic relation <a href="02_boundary_value_problem.html#eq:kin">(2.2)</a> into the material law <a href="02_boundary_value_problem.html#eq:resultant">(2.4)</a>, so <span class="math inline">\(N = EA\,u&#39;\)</span>, and that into the balance <a href="02_boundary_value_problem.html#eq:equil">(2.1)</a>: <span id="eq:strongode"></span><span class="math display">\[\boxed{\;\frac{\mathrm{d}}{\mathrm{d}x}\!\left( EA \,\frac{\mathrm{d}u}{\mathrm{d}x}\right) + n(x) = 0,
+  \qquad 0&lt;x&lt;L. \;}
+  
+\tag{2.5}\]</span> For constant <span class="math inline">\(EA\)</span> this is simply <span class="math inline">\(EA\,u&#39;&#39; = -n(x)\)</span>: a second-order ordinary differential equation for the unknown function <span class="math inline">\(u(x)\)</span>.</p>
+<p>The structure of what we just did deserves its own picture (Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a>): the primal variable <span class="math inline">\(u\)</span> is differentiated into <span class="math inline">\(\varepsilon\)</span> (kinematics), converted by the material into <span class="math inline">\(N\)</span> (constitution), and differentiated again into a balance with the load <span class="math inline">\(n\)</span> (equilibrium). The differential equation is nothing but the <em>composition of the three arrows</em>. And say it explicitly, because the numbering (i)–(iii) may suggest otherwise: the order was presentation, not logic. The three statements are independent — none follows from another — and we could have told them in any sequence; we chose balance-first because it is the most familiar, while the <em>arrows</em> of the diagram run <span class="math inline">\(u \to n\)</span>, and the problem we solve (dashed) runs backwards again. Hold on to this diagram; it is worth more than it seems.</p>
+<figure id="fig:tontichain">
+<img src="figs/02_fig3.svg" style="width:447px" alt="" />
+<figcaption><strong>Figure 2.3.</strong> The three-step structure behind the differential equation. Solid arrows are the physics (each one line); the dashed arrow is the inverse problem we actually want to solve.</figcaption>
+</figure>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p>This three-step pattern — a <em>kinematic</em> relation, a <em>material</em> law, a <em>balance</em> law — is not special to elasticity. Steady heat conduction: temperature <span class="math inline">\(T \to\)</span> temperature gradient <span class="math inline">\(\to\)</span> heat flux (Fourier’s law) <span class="math inline">\(\to\)</span> heat balance. Electrostatics, groundwater flow, diffusion: same skeleton, different names. We exploit this deliberately in the exercise that follows this lecture, and we will give the pattern its proper name in Lecture 4. For now, one message: <strong>learn the steps, not the symbols</strong>.</p>
+</div>
+<h2 id="sec:bvp">2.3   The boundary value problem</h2>
+<p>A differential equation alone does not determine <span class="math inline">\(u\)</span> — integrating <a href="02_boundary_value_problem.html#eq:strongode">(2.5)</a> twice produces two free constants. The missing information sits at the two ends of the bar, exactly where Lecture 1 put its supports and loads. The complete problem statement is called a <em>boundary value problem</em> (BVP):</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Boundary value problem (strong form).</strong> <em>Domain</em>: the open interval <span class="math inline">\(\Omega=(0,L)\)</span> — the body itself. <em>Boundary</em>: <span class="math inline">\(\Gamma = \{0, L\}\)</span> — here just two points. Find the function <span class="math inline">\(u(x)\)</span> such that <span class="math display">\[\left(EA\,u&#39;\right)&#39; + n = 0 \ \text{ in } \Omega,\]</span> and such that at <em>each</em> boundary point exactly one of the following holds: <span class="math display">\[\text{(a) } u = \bar u \ \text{(prescribed displacement)}
+  \quad\text{or}\quad
+  \text{(b) } N = EA\,u&#39; = \bar F \ \text{(prescribed end force).}\]</span> In (b), <span class="math inline">\(\bar F\)</span> is the applied force, positive in <span class="math inline">\(+x\)</span>: <span class="math inline">\(N(L) = \bar F\)</span> at the right end, but <span class="math inline">\(-N(0) = \bar F\)</span> at the left end (as <span class="math inline">\(f_1 = -N\)</span> in Lecture 1).</p>
+</div>
+<p>This is the function version of the rule from Section <a href="01_springs_and_stiffness.html#sec:bc">1.5</a>: at every boundary point, one member of the conjugate pair <span class="math inline">\((u, N)\)</span> is given, the other comes out of the solution. And as before, at least one point must prescribe <span class="math inline">\(u\)</span> itself, or the bar floats (<span class="math inline">\(u\)</span> determined only up to a constant — the rigid body mode again, now appearing as the constant of integration).</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Names you will meet.</strong> Conditions on the primal variable <span class="math inline">\(u\)</span> are called <em>Dirichlet</em> or <em>essential</em> boundary conditions; conditions on the derivative quantity (force, flux) are <em>Neumann</em> or <em>natural</em>. Either kind is <em>homogeneous</em> if the prescribed value is zero (<span class="math inline">\(u=0\)</span>: fixed support; <span class="math inline">\(N=0\)</span>: free end) and <em>non-homogeneous</em> otherwise (<span class="math inline">\(u=\delta\)</span>: dragged support; <span class="math inline">\(N=\bar F\)</span>: applied end load). Why “essential” versus “natural” is apt will become clear — rather beautifully — in Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a>. Until then, treat the names as vocabulary.</p>
+</div>
+<h2 id="sec:exact">2.4   Reference solutions — and where the conditions come from</h2>
+<p>To judge approximations we need cases we can solve exactly. We solve <em>two</em>, with different boundary conditions, which shows at the same time where the conditions come from physically and that the solution procedure is indifferent to which legal pair we pick. Both cases share a constant <span class="math inline">\(EA\)</span> and a constant distributed load <span class="math inline">\(n(x)=n_0\)</span> (Fig. <a href="02_boundary_value_problem.html#fig:refcases">2.4</a>).</p>
+<figure id="fig:refcases">
+<img src="figs/02_fig4.svg" style="width:580px" alt="" />
+<figcaption><strong>Figure 2.4.</strong> The two reference cases. Same bar, same distributed load (axial, as always); only the boundary conditions differ.</figcaption>
+</figure>
+<h5 id="case-a-clamped-at-both-ends.">Case A: clamped at both ends.</h5>
+<p>The bar is welded to rigid walls. A wall is a device that prevents displacement, so each wall dictates an <em>essential</em> condition, here both homogeneous: <span class="math inline">\(u(0)=0\)</span> and <span class="math inline">\(u(L)=0\)</span>. In exchange we surrender all knowledge of the end forces — the walls will supply whatever reactions it takes (Section <a href="01_springs_and_stiffness.html#sec:bc">1.5</a>, now in function clothes). The BVP: <span id="eq:refbvp"></span><span class="math display">\[EA\,u&#39;&#39; = -n_0, \qquad u(0)=0,\quad u(L)=0 .
+  
+\tag{2.6}\]</span> Integrating twice gives <span class="math inline">\(u = -\tfrac{n_0}{2EA}x^2 + C_1 x + C_2\)</span> — <em>every</em> choice of the constants solves the differential equation; it is the two boundary conditions that single out one solution. Here <span class="math inline">\(u(0)=0\)</span> forces <span class="math inline">\(C_2 = 0\)</span> and <span class="math inline">\(u(L)=0\)</span> forces <span class="math inline">\(C_1 = n_0 L/(2EA)\)</span>: <span id="eq:refexact"></span><span class="math display">\[u_{\mathrm{ex}}(x) = \frac{n_0}{2EA}\,x\,(L-x),
+  
+\tag{2.7}\]</span> a parabola, symmetric, zero at both ends — a chain of springs between two walls, each node pushed to the right by the same force, would show the same pattern. Keep <a href="02_boundary_value_problem.html#eq:refexact">(2.7)</a> within reach; the coming sections shoot at it repeatedly.</p>
+<h5 id="case-b-clamped-left-pulled-right.">Case B: clamped left, pulled right.</h5>
+<p>Remove the right wall and instead pull with a known force: <span class="math inline">\(u(0)=0\)</span> (essential) and <span class="math inline">\(N(L) = EA\,u&#39;(L) = \bar F\)</span> (natural, non-homogeneous). For this pair it pays to integrate the balance first: <span class="math inline">\(N&#39; = -n_0\)</span> gives <span class="math inline">\(N(x) = -n_0 x + C_1\)</span>, and <span class="math inline">\(N(L) = \bar F\)</span> fixes <span class="math inline">\(C_1\)</span>, so <span class="math display">\[N(x) = \bar F + n_0\,(L-x)\]</span> — read it physically: the cross-section at <span class="math inline">\(x\)</span> carries the end force plus all the distributed load hanging beyond it. (Statics alone could have told us this; with these boundary conditions the internal force is known before any displacement is.) One more integration, <span class="math inline">\(EA\,u&#39; = N\)</span> with <span class="math inline">\(u(0)=0\)</span>: <span class="math display">\[u_{\mathrm{ex}}(x)
+  = \frac{1}{EA}\Bigl[\bar F\,x + n_0\Bigl(Lx - \frac{x^2}{2}\Bigr)\Bigr].\]</span> With <span class="math inline">\(\bar F = 0\)</span> (a free end, the homogeneous natural condition) this is exactly the solution our finite elements will be tested against in Section <a href="02_boundary_value_problem.html#sec:twoelem">2.12</a>.</p>
+<p>Two different boundary-condition pairs, one procedure: the differential equation supplies a two-parameter family of candidates, and exactly two conditions — one per boundary point, each a legal member of its conjugate pair <span class="math inline">\((u, N)\)</span> — pin the two constants down. Case A is our target for the ansatz methods; Case B (with <span class="math inline">\(\bar F = 0\)</span>) returns in Section <a href="02_boundary_value_problem.html#sec:twoelem">2.12</a>.</p>
+<h2 id="sec:ansatz">2.5   The ansatz: turning a function into a few numbers</h2>
+<p>Here is the single most important conceptual move of the course. We cannot search through “all functions” for the solution — there are too many. Instead we <em>choose a family</em> of candidate functions described by a few parameters, and search only within the family. Such a chosen form is called an <em>ansatz</em> (German for “approach/setup”; plural Ansätze): <span id="eq:ansatz"></span><span class="math display">\[\tilde u(x) \;=\; \sum_{j=1}^{m} a_j\,\varphi_j(x),
+  
+\tag{2.8}\]</span> where the <span class="math inline">\(\varphi_j\)</span> are functions <em>we pick</em> (known), and the <span class="math inline">\(a_j\)</span> are numbers <em>to be determined</em> (unknown). With the ansatz, the impossible task “find a function” becomes the familiar task “find <span class="math inline">\(m\)</span> numbers” — and Lecture 1 taught us everything about finding a few numbers from a few linear equations.</p>
+<p>Two requirements guide the choice of the <span class="math inline">\(\varphi_j\)</span> for now: the ansatz should satisfy the essential boundary conditions for any values of the <span class="math inline">\(a_j\)</span>, and it should be smooth enough to differentiate. For the reference problem <a href="02_boundary_value_problem.html#eq:refbvp">(2.6)</a>, a convenient one-parameter ansatz is <span class="math display">\[\tilde u(x) = a_1\,\varphi_1(x), \qquad \varphi_1(x) = x(L-x),\]</span> which vanishes at <span class="math inline">\(x=0\)</span> and <span class="math inline">\(x=L\)</span> no matter what <span class="math inline">\(a_1\)</span> is.</p>
+<p>How do we judge a candidate? Insert it into the differential equation. Whatever is left over is the <em>residual</em>: <span id="eq:residual"></span><span class="math display">\[R(x) \;=\; EA\,\tilde u&#39;&#39;(x) + n(x).
+  
+\tag{2.9}\]</span> For the true solution the residual vanishes identically — the equation holds at every point. For our finitely-parameterized <span class="math inline">\(\tilde u\)</span> it generally cannot vanish everywhere; <span class="math inline">\(R(x)\)</span> measures <em>how wrong the candidate is at each point <span class="math inline">\(x\)</span></em>. All methods that follow are different answers to one question:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>We cannot make <span class="math inline">\(R(x)=0\)</span> everywhere. <em>In what sense, then, should we make the residual small?</em> Every classical discretization method — collocation, least squares, Galerkin — is one specific answer. The unknowns <span class="math inline">\(a_j\)</span> are then found from <span class="math inline">\(m\)</span> conditions, one per parameter.</p>
+</div>
+<h2 id="sec:collocation">2.6   Answer 1: collocation — insist at a few points</h2>
+<p>The bluntest answer: force <span class="math inline">\(R=0\)</span> at <span class="math inline">\(m\)</span> chosen points (“collocation points”), and look away everywhere else.</p>
+<h5 id="example-1-constant-load.">Example 1 (constant load).</h5>
+<p>Reference problem <a href="02_boundary_value_problem.html#eq:refbvp">(2.6)</a>, ansatz <span class="math inline">\(\tilde u = a_1 x(L-x)\)</span>, so <span class="math inline">\(\tilde u&#39;&#39; = -2a_1\)</span> and <span class="math display">\[R(x) = -2a_1 EA + n_0 .\]</span> The residual happens to be constant, so collocation at <em>any</em> point gives <span class="math display">\[a_1 = \frac{n_0}{2EA}
+  \quad\Longrightarrow\quad
+  \tilde u(x) = \frac{n_0}{2EA}\,x(L-x) = u_{\mathrm{ex}}(x).\]</span> We recovered the exact solution. No miracle: the exact solution <a href="02_boundary_value_problem.html#eq:refexact">(2.7)</a> is itself of the form <span class="math inline">\(a\,x(L-x)\)</span> — it <em>lives inside our ansatz family</em>, and any sensible method will find it. Remember this principle; it returns in Section <a href="02_boundary_value_problem.html#sec:fe">2.11</a> with practical force.</p>
+<h5 id="example-2-linear-load.">Example 2 (linear load).</h5>
+<p>Now sharpen the test: triangular load <span class="math inline">\(n(x) = n_0\,x/L\)</span>, same BVP otherwise. The exact solution (integrate twice, fit the ends) is the <em>cubic</em> <span id="eq:exactcubic"></span><span class="math display">\[u_{\mathrm{ex}}(x) = \frac{n_0}{6EA}\,\frac{x\,(L^2 - x^2)}{L},
+  
+\tag{2.10}\]</span> which does <em>not</em> live in the one-parameter family <span class="math inline">\(a_1 x(L-x)\)</span>. The residual <span class="math display">\[R(x) = -2a_1 EA + n_0 \frac{x}{L}\]</span> now genuinely depends on <span class="math inline">\(x\)</span>. Collocating at <span class="math inline">\(x=L/2\)</span> gives <span class="math inline">\(a_1 = n_0/(4EA)\)</span>; collocating at <span class="math inline">\(x=L/4\)</span> gives <span class="math inline">\(a_1 = n_0/(8EA)\)</span> — half the displacement, as if the bar were twice as stiff, from the same ansatz! The result depends on an arbitrary choice that has nothing to do with the physics. Collocation is simple and sometimes useful, but this arbitrariness is a real flaw. Surely the equation at <em>all</em> points should have a say.</p>
+<h2 id="sec:leastsq">2.7   Answer 2: least squares — minimize the total misfit</h2>
+<p>A natural repair: make the residual small <em>on average</em>, by minimizing its integrated square, <span class="math display">\[\min_{a_1,\dots,a_m} \int_0^L R(x)^2 \,\mathrm{d}x .\]</span> For Example 2 the derivative with respect to <span class="math inline">\(a_1\)</span> must vanish. Since <span class="math inline">\(\partial R/\partial a_1 = -2EA\)</span>, this is <span class="math inline">\(\frac{\mathrm{d}}{\mathrm{d}a_1}\int_0^L R^2\,\mathrm{d}x = \int_0^L 2R\,\frac{\partial R}{\partial a_1}\,\mathrm{d}x
+= -4EA\int_0^L R\,\mathrm{d}x = 0\)</span>, so <span class="math display">\[\int_0^L \Bigl(-2a_1EA + n_0\tfrac{x}{L}\Bigr)\,\mathrm{d}x = 0
+  \quad\Longrightarrow\quad
+  a_1 = \frac{n_0}{4EA}.\]</span> No arbitrary points anymore — every <span class="math inline">\(x\)</span> was consulted. Least squares is a respectable method (and reappears in modern research), but for our problems a third answer turns out to carry more structure. To see it, first put all answers under one roof.</p>
+<h2 id="sec:galerkin">2.8   Answer 3: weighted residuals and Galerkin’s choice</h2>
+<p>All methods so far share one shape. Multiply the residual by a chosen <em>weight function</em> <span class="math inline">\(w(x)\)</span> and demand that the product integrate to zero: <span id="eq:wr"></span><span class="math display">\[\int_0^L w_i(x)\,R(x)\,\mathrm{d}x = 0, \qquad i=1,\dots,m .
+  
+\tag{2.11}\]</span> One weight per unknown parameter: <span class="math inline">\(m\)</span> equations for <span class="math inline">\(m\)</span> unknowns. The residual is made to vanish “as seen through the eyes of” each weight function:</p>
+<ul>
+<li><p>Collocation: <span class="math inline">\(w_i\)</span> = needle-like spikes at the collocation points (Dirac deltas) — only those points are consulted.</p></li>
+<li><p>Least squares: <span class="math inline">\(w_i = \partial R/\partial a_i\)</span> — the weights follow from the minimization.</p></li>
+<li><p><strong>Galerkin</strong>: <span class="math inline">\(w_i = \varphi_i\)</span> — <em>the weights are the ansatz functions themselves</em>.</p></li>
+</ul>
+<p>Galerkin’s choice looks innocent, almost lazy. It is in fact the deepest of the three: it will turn out to be equivalent to minimizing the potential energy <span class="math inline">\(\Pi\)</span> from Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a>, it produces <em>symmetric</em> stiffness matrices, and it comes with the strongest approximation guarantees. We adopt it from here on.</p>
+<h5 id="example-2-galerkin-one-parameter.">Example 2, Galerkin, one parameter.</h5>
+<p>With <span class="math inline">\(w_1=\varphi_1=x(L-x)\)</span>: <span class="math display">\[\int_0^L x(L-x)\Bigl(-2a_1EA + n_0\tfrac{x}{L}\Bigr)\mathrm{d}x = 0
+  \;\Longrightarrow\;
+  -2a_1EA\,\frac{L^3}{6} + n_0\,\frac{L^3}{12} = 0
+  \;\Longrightarrow\;
+  a_1 = \frac{n_0}{4EA}.\]</span></p>
+<h5 id="example-2-galerkin-two-parameters.">Example 2, Galerkin, two parameters.</h5>
+<p>Add a second function: <span class="math inline">\(\varphi_2 = x^2(L-x)\)</span> (also zero at both ends), so <span class="math inline">\(\tilde u = a_1\varphi_1 + a_2\varphi_2\)</span>. Writing <a href="02_boundary_value_problem.html#eq:wr">(2.11)</a> for <span class="math inline">\(i=1,2\)</span> and sorting terms produces — look at the shape of it — a linear system <span id="eq:KafGalerkin"></span><span class="math display">\[\begin{bmatrix} K_{11} &amp; K_{12}\\ K_{21} &amp; K_{22}\end{bmatrix}
+  \begin{bmatrix} a_1\\ a_2 \end{bmatrix}
+  =
+  \begin{bmatrix} f_1\\ f_2 \end{bmatrix},
+  \qquad
+  K_{ij} = \int_0^L EA\,\varphi_i&#39;\,\varphi_j&#39;\,\mathrm{d}x,
+  \qquad
+  f_i = \int_0^L \varphi_i\, n\,\mathrm{d}x,
+  
+\tag{2.12}\]</span> (the <span class="math inline">\(K_{ij}\)</span> are stated here in the symmetric form justified in the next section: from <a href="02_boundary_value_problem.html#eq:wr">(2.11)</a> you get <span class="math inline">\(\int_0^L \varphi_i\,(-EA\,\varphi_j&#39;&#39;)\,\mathrm{d}x\)</span>; one integration by parts turns it into the form above, because <span class="math inline">\(\varphi_i(0)=\varphi_i(L)=0\)</span> — both give the same numbers). Carrying out the four integrals: <span class="math display">\[\begin{bmatrix} \dfrac{EAL^3}{3} &amp; \dfrac{EAL^4}{6}\\[2.5mm]
+                  \dfrac{EAL^4}{6} &amp; \dfrac{2EAL^5}{15}\end{bmatrix}
+  \begin{bmatrix} a_1\\ a_2 \end{bmatrix}
+  =
+  \begin{bmatrix} \dfrac{n_0L^3}{12}\\[2.5mm] \dfrac{n_0L^4}{20} \end{bmatrix}
+  \quad\Longrightarrow\quad
+  a_1 = \frac{n_0}{6EA},\qquad a_2 = \frac{n_0}{6EAL},\]</span> and assembling <span class="math inline">\(\tilde u = a_1\varphi_1 + a_2\varphi_2\)</span> gives <em>exactly</em> the cubic <a href="02_boundary_value_problem.html#eq:exactcubic">(2.10)</a>. With two parameters the exact solution entered the family, and Galerkin found it — just as promised by the principle of Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a>.</p>
+<p>Pause on the notation in <a href="02_boundary_value_problem.html#eq:KafGalerkin">(2.12)</a>. A matrix <span class="math inline">\(\mathbf{K}\)</span>, a vector of unknowns, a load vector <span class="math inline">\(\mathbf{f}\)</span>: <span class="math inline">\(\mathbf{K}\mathbf{a} = \mathbf{f}\)</span>. The same algebraic animal as Lecture 1 — except the unknowns <span class="math inline">\(a_j\)</span> are, so far, abstract coefficients with no physical face. Giving them a face is the job of Section <a href="02_boundary_value_problem.html#sec:shape">2.10</a>. One more mathematical stop first.</p>
+<h2 id="sec:weak">2.9   The weak form: shifting a derivative</h2>
+<p>A technical irritation: the residual <a href="02_boundary_value_problem.html#eq:residual">(2.9)</a> contains <span class="math inline">\(\tilde u&#39;&#39;\)</span>, so every ansatz function must be twice differentiable — this will collide head-on with the piecewise-linear functions we are about to love. The cure is one application of a rule you already know, and it carries a surprising amount of structure out with it.</p>
+<p>Recall the product rule, <span class="math inline">\((w\,g)&#39; = w&#39;g + w\,g&#39;\)</span>, integrated over the bar: <span class="math display">\[\bigl[\,w\,g\,\bigr]_0^L = \int_0^L w&#39;\,g\,\mathrm{d}x + \int_0^L w\,g&#39;\,\mathrm{d}x
+  \quad\Longleftrightarrow\quad
+  \int_0^L w\,g&#39;\,\mathrm{d}x = \bigl[\,w\,g\,\bigr]_0^L - \int_0^L w&#39;\,g\,\mathrm{d}x .\]</span> This is <em>integration by parts</em>: it moves one derivative from <span class="math inline">\(g\)</span> onto <span class="math inline">\(w\)</span>, at the price of a boundary term. Apply it to the weighted residual statement with <span class="math inline">\(g = EA\,u&#39; = N\)</span>: <span class="math display">\[\int_0^L w\,\bigl[(EA\,u&#39;)&#39; + n\bigr]\mathrm{d}x = 0
+  \quad\Longrightarrow\quad
+  \underbrace{\int_0^L w&#39;\,EA\,u&#39;\,\mathrm{d}x}_{\text{both sides: one derivative}}
+  = \int_0^L w\,n\,\mathrm{d}x + \bigl[\,w\,N\,\bigr]_0^L .\]</span> Now deal with the boundary term, and watch the boundary conditions sort <em>themselves</em> into the two kinds of Section <a href="02_boundary_value_problem.html#sec:bvp">2.3</a>:</p>
+<ul>
+<li><p>At an end where <span class="math inline">\(u\)</span> is prescribed (essential BC), the solution has no freedom, so we require the weights to vanish there: <span class="math inline">\(w=0\)</span>. The boundary term dies.</p></li>
+<li><p>At an end where the force is prescribed (natural BC), say <span class="math inline">\(N(L) = \bar F\)</span>, we simply <em>substitute</em>: the term becomes <span class="math inline">\(w(L)\,\bar F\)</span> — a known load-like contribution.</p></li>
+</ul>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Weak form.</strong> Find <span class="math inline">\(u\)</span> with <span class="math inline">\(u=\bar u\)</span> on the essential boundary, such that <span class="math display">\[\int_0^L w&#39;\,EA\,u&#39;\,\mathrm{d}x
+  \;=\;
+  \int_0^L w\,n\,\mathrm{d}x \;+\; w(L)\,\bar F
+  \qquad\text{for all admissible weights } w .\]</span> “Admissible”: <span class="math inline">\(w=0\)</span> wherever <span class="math inline">\(u\)</span> is prescribed. The force boundary condition is nowhere imposed — it entered the equation by itself. That is why it is called <em>natural</em>; the condition on <span class="math inline">\(u\)</span>, which we must still enforce by hand, is <em>essential</em>. (The names from Section <a href="02_boundary_value_problem.html#sec:bvp">2.3</a>, now earned.)</p>
+</div>
+<p>Three gifts, delivered by one integration by parts:</p>
+<ol>
+<li><p><strong>Less smoothness needed.</strong> Only <em>first</em> derivatives of <span class="math inline">\(u\)</span> and <span class="math inline">\(w\)</span> appear. Functions with kinks — piecewise linear ones! — are now legal. “Weak” refers to these weakened demands.</p></li>
+<li><p><strong>Natural boundary conditions handle themselves.</strong> Applied end forces simply append to the right-hand side; only the essential conditions need enforcement. (Remember how in Lecture 1 prescribed forces went into <span class="math inline">\(\mathbf{f}\)</span> while prescribed displacements needed the partitioning surgery — the same asymmetry, seen from the other side.)</p></li>
+<li><p><strong>Symmetry.</strong> The left side treats <span class="math inline">\(w\)</span> and <span class="math inline">\(u\)</span> identically. With Galerkin (<span class="math inline">\(w\)</span> and <span class="math inline">\(u\)</span> built from the same <span class="math inline">\(\varphi_i\)</span>) this yields <span class="math inline">\(K_{ij}=K_{ji}\)</span> — the symmetric matrices promised in <a href="02_boundary_value_problem.html#eq:KafGalerkin">(2.12)</a>. Deeper still: the weak form is exactly the condition <span class="math inline">\(\frac{\mathrm{d}}{\mathrm{d}\alpha}\Pi(u+\alpha w)\big|_{\alpha=0}=0\)</span> — “the derivative of the potential energy vanishes in every direction <span class="math inline">\(w\)</span>”, with the bar’s potential energy <span class="math inline">\(\Pi[u] = \int_0^L \tfrac12 EA\,u&#39;^2\,\mathrm{d}x - \int_0^L n\,u\,\mathrm{d}x - \bar F\,u(L)\)</span>. Galerkin’s method <em>is</em> the minimum-energy principle of Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a>, grown up to handle functions. One can also read <span class="math inline">\(w\)</span> as a small imagined (“virtual”) displacement, which is why engineers call the weak form the <em>principle of virtual work</em>.</p></li>
+</ol>
+<h2 id="sec:shape">2.10   Discretization: shape functions</h2>
+<p>Everything so far used hand-picked global ansatz functions like <span class="math inline">\(x(L-x)\)</span> — fine for a textbook interval, hopeless in practice. Suppose the domain is a bracket with holes, or even just a bar with ten different segments: inventing smooth functions that satisfy the essential boundary conditions <em>and</em> approximate well <em>everywhere</em> is an art, not a method. Worse, the coefficients <span class="math inline">\(a_j\)</span> mean nothing physical, and each <span class="math inline">\(\varphi_j\)</span> is nonzero over the whole domain, so <span class="math inline">\(\mathbf{K}\)</span> is full.</p>
+<p>The fix is one of the great simple ideas of twentieth-century computation. <em>Chop the domain into pieces, and build the ansatz from the simplest possible local functions.</em> Place <span class="math inline">\(m\)</span> nodes <span class="math inline">\(x_1&lt;x_2&lt;\dots&lt;x_m\)</span> on the bar (any spacing); call the pieces between consecutive nodes <em>elements</em>. To node <span class="math inline">\(i\)</span> attach the <em>hat function</em> <span class="math inline">\(N_i(x)\)</span>: piecewise linear, equal to <span class="math inline">\(1\)</span> at node <span class="math inline">\(i\)</span>, equal to <span class="math inline">\(0\)</span> at every other node (Fig. <a href="02_boundary_value_problem.html#fig:hats">2.5</a>). (Careful: <span class="math inline">\(N_i\)</span>, with a subscript, is a shape function, not the normal force <span class="math inline">\(N\)</span>.) The ansatz is <span id="eq:fem-ansatz"></span><span class="math display">\[\tilde u(x) = \sum_{i=1}^{m} u_i\,N_i(x).
+  
+\tag{2.13}\]</span></p>
+<figure id="fig:hats">
+<img src="figs/02_fig5.svg" style="width:466px" alt="" />
+<figcaption><strong>Figure 2.5.</strong> Hat (shape) functions for four nodes — note the deliberately non-uniform spacing. Each <span class="math inline">\(N_i\)</span> lives only on the elements touching node <span class="math inline">\(i\)</span>.</figcaption>
+</figure>
+<p>The functions <span class="math inline">\(N_i\)</span> are called <em>shape functions</em>, and three of their properties quietly solve three different problems at once:</p>
+<ol>
+<li><p><strong>Kronecker property: the parameters get a physical face.</strong> Since <span class="math inline">\(N_i(x_j) = 1\)</span> if <span class="math inline">\(i=j\)</span> and <span class="math inline">\(0\)</span> otherwise, evaluating <a href="02_boundary_value_problem.html#eq:fem-ansatz">(2.13)</a> at node <span class="math inline">\(j\)</span> gives <span class="math inline">\(\tilde u(x_j) = u_j\)</span>. The coefficient <span class="math inline">\(u_j\)</span> <em>is</em> the displacement of node <span class="math inline">\(j\)</span> — not an abstract number. The nodal displacements of Lecture 1 are back, now as parameters of a genuine function defined <em>everywhere</em>, with linear interpolation between nodes.</p></li>
+<li><p><strong>Essential boundary conditions without thinking.</strong> To impose <span class="math inline">\(u(0) = \bar u\)</span>: set <span class="math inline">\(u_1 = \bar u\)</span>. Done. Fixing a boundary value of the <em>function</em> reduces to fixing one <em>coefficient</em> — exactly the “prescribed DOF” of Section <a href="01_springs_and_stiffness.html#sec:bc">1.5</a>, handled by the same partitioning <a href="01_springs_and_stiffness.html#eq:solve">(1.5)</a>. Compare the ingenuity we needed to cook up <span class="math inline">\(x(L-x)\)</span>, which satisfied the BCs by construction; here, <em>any</em> boundary values on <em>any</em> mesh are imposed mechanically. This modularity — functions that make no commitment to particular boundary conditions, plus a trivial rule for imposing them later — is what makes the method programmable.</p></li>
+<li><p><strong>Locality.</strong> <span class="math inline">\(N_i\)</span> overlaps only its neighbors, so <span class="math inline">\(K_{ij} = \int N_i&#39;\,EA\,N_j&#39;\,\mathrm{d}x = 0\)</span> unless <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> share an element: the sparse, banded matrices of Lecture 1, resurrected from pure calculus.</p></li>
+</ol>
+<p>(And since the hats sum to one at every point, <span class="math inline">\(\sum_i N_i(x) = 1\)</span>, the ansatz can represent a rigid translation <span class="math inline">\(u=\text{const}\)</span> exactly — the rigid body mode is still faithfully in the family, as it must be.)</p>
+<p>Are kinked functions allowed? In the strong form, no — <span class="math inline">\(\tilde u&#39;&#39;\)</span> blows up at the kinks. In the <em>weak</em> form, yes: only first derivatives appear, and those are perfectly decent piecewise constants. This is why Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a> had to come before this one. The weak form is not mathematical pedantry; it is the licence for hat functions.</p>
+<h2 id="sec:fe">2.11   The finite element, at last</h2>
+<p>Now run Galerkin on the weak form with the hat ansatz. The global statement, for each weight <span class="math inline">\(w = N_i\)</span>: <span class="math display">\[\sum_j \left[\int_0^L N_i&#39;\,EA\,N_j&#39;\,\mathrm{d}x\right] u_j
+  = \int_0^L N_i\,n\,\mathrm{d}x + \text{boundary force terms}.\]</span> The key computational observation: every integral over <span class="math inline">\((0,L)\)</span> is a <em>sum of integrals over the elements</em>, and on a single element only the two local hats are nonzero. So we may compute everything element by element and add — which is precisely the <em>assembly</em> of Lecture 1, now reappearing as the additivity of integration.</p>
+<p>Take one element of length <span class="math inline">\(h\)</span>, local coordinate <span class="math inline">\(\xi\in[0,h]\)</span>, local nodes 1 and 2. The two shape-function pieces on it (Fig. <a href="02_boundary_value_problem.html#fig:elemN">2.6</a>) and their derivatives are <span class="math display">\[N_1 = 1-\frac{\xi}{h},\quad N_2 = \frac{\xi}{h};
+  \qquad
+  N_1&#39; = -\frac1h,\quad N_2&#39; = \frac1h .\]</span> It pays to bundle the derivatives in a row vector, because exactly this object generalizes to 2D and 3D: <span class="math display">\[\mathbf{B} = \begin{bmatrix} N_1&#39; &amp; N_2&#39; \end{bmatrix}
+         = \frac1h\begin{bmatrix} -1 &amp; 1 \end{bmatrix},
+  \qquad
+  \varepsilon(\xi) = \mathbf{B}\,\mathbf{u}^e, \quad \mathbf{u}^e = \begin{bmatrix}u_1\\u_2\end{bmatrix},
+  \quad \mathbf{N} = \begin{bmatrix} N_1 &amp; N_2 \end{bmatrix}.\]</span> (<span class="math inline">\(\mathbf{B}\)</span> turns nodal displacements into strain; check: <span class="math inline">\(\varepsilon= (u_2-u_1)/h\)</span>, elongation over length, as geometry demands.) The element’s contribution to the stiffness matrix is <span id="eq:kefem"></span><span class="math display">\[\mathbf{k}^e = \int_0^h \mathbf{B}^{\mathsf{T}}\, EA\,\mathbf{B}\,\mathrm{d}\xi
+  = \frac{EA}{h^2}
+    \begin{bmatrix} 1 &amp; -1\\ -1 &amp; 1\end{bmatrix} \int_0^h \mathrm{d}\xi
+  = \boxed{\;\frac{EA}{h}\begin{bmatrix} 1 &amp; -1\\ -1 &amp; 1 \end{bmatrix}\;}
+  
+\tag{2.14}\]</span> and, for a constant distributed load <span class="math inline">\(n_0\)</span>, its load contribution is <span id="eq:fefem"></span><span class="math display">\[\mathbf{f}^e = \int_0^h \begin{bmatrix}N_1\\N_2\end{bmatrix} n_0 \,\mathrm{d}\xi
+  = \frac{n_0 h}{2}\begin{bmatrix}1\\1\end{bmatrix}.
+  
+\tag{2.15}\]</span></p>
+<figure id="fig:elemN">
+<img src="figs/02_fig6.svg" style="width:291px" alt="" />
+<figcaption><strong>Figure 2.6.</strong> The two shape functions of a single bar element.</figcaption>
+</figure>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>Equation <a href="02_boundary_value_problem.html#eq:kefem">(2.14)</a> is the spring matrix of Lecture 1 with <span class="math inline">\(k = EA/h\)</span> — derived, this time, from the differential equation through Galerkin’s method, with no springs in sight. The engineering intuition and the mathematics are the same theory. And <a href="02_boundary_value_problem.html#eq:fefem">(2.15)</a> settles by calculation what intuition could only guess: a uniformly distributed load is carried to the two nodes in equal halves.</p>
+</div>
+<p>The general pattern, worth memorizing in this exact form because it will survive every generalization to come: <span id="eq:kpattern"></span><span class="math display">\[\boxed{\;\begin{aligned}
+  \mathbf{k}^e &amp;= \int_{\text{element}} \mathbf{B}^{\mathsf{T}}\,
+  (\text{material stiffness})\,\mathbf{B}\;\mathrm{d}(\text{volume}),\\
+  \mathbf{f}^e &amp;= \int_{\text{element}} \mathbf{N}^{\mathsf{T}}\,(\text{load})\;\mathrm{d}(\text{volume}).
+  \end{aligned}\;}
+  
+\tag{2.16}\]</span> (In 1D: material stiffness <span class="math inline">\(E\)</span> and <span class="math inline">\(\mathrm{d}(\text{volume}) = A\,\mathrm{d}\xi\)</span>, which gives the <span class="math inline">\(EA\)</span> of <a href="02_boundary_value_problem.html#eq:kefem">(2.14)</a>.)</p>
+<h2 id="sec:twoelem">2.12   Worked example: two elements against the exact solution</h2>
+<p>Problem: bar of length <span class="math inline">\(L\)</span>, constant <span class="math inline">\(EA\)</span>, constant load <span class="math inline">\(n_0\)</span> (think self-weight), fixed at the left, free at the right: <span class="math display">\[(EA u&#39;)&#39; + n_0 = 0,\qquad u(0)=0,\qquad N(L)=0 .\]</span> Exact solution: <span class="math inline">\(u_{\mathrm{ex}}(x) = \dfrac{n_0}{EA}\left(Lx - \dfrac{x^2}{2}\right)\)</span>.</p>
+<p>Mesh: two equal elements, <span class="math inline">\(h = L/2\)</span>, nodes <span class="math inline">\(1,2,3\)</span>. Both elements have <span class="math inline">\(\mathbf{k}^e = \frac{EA}{h}\left[\begin{smallmatrix}1&amp;-1\\-1&amp;1\end{smallmatrix}\right]\)</span> and <span class="math inline">\(\mathbf{f}^e = \frac{n_0 h}{2}\left[\begin{smallmatrix}1\\1\end{smallmatrix}\right]\)</span>. Assembly (Lecture 1, verbatim — node 2 receives <span class="math inline">\(\tfrac{n_0h}{2}\)</span> from each side): <span class="math display">\[\frac{EA}{h}\begin{bmatrix} 1 &amp; -1 &amp; 0\\ -1 &amp; 2 &amp; -1\\ 0 &amp; -1 &amp; 1\end{bmatrix}
+  \begin{bmatrix} u_1\\u_2\\u_3\end{bmatrix}
+  =
+  n_0 h\begin{bmatrix} 1/2\\ 1\\ 1/2 \end{bmatrix} .\]</span> Essential BC: <span class="math inline">\(u_1 = 0\)</span>; the free end needs no action (natural!). Strike row and column 1: <span class="math display">\[\frac{EA}{h}\begin{bmatrix} 2 &amp; -1\\ -1 &amp; 1 \end{bmatrix}
+  \begin{bmatrix} u_2\\u_3 \end{bmatrix}
+  = n_0 h \begin{bmatrix} 1\\ 1/2\end{bmatrix}
+  \quad\Longrightarrow\quad
+  u_2 = \frac{3 n_0 h^2}{2EA} = \frac{3 n_0 L^2}{8EA},
+  \qquad
+  u_3 = \frac{n_0 L^2}{2EA}.\]</span> Compare: <span class="math inline">\(u_{\mathrm{ex}}(L/2) = \frac{3n_0L^2}{8EA}\)</span>, <span class="math inline">\(\ u_{\mathrm{ex}}(L) = \frac{n_0L^2}{2EA}\)</span>. <em>The finite element solution is exact at the nodes</em> (Fig. <a href="02_boundary_value_problem.html#fig:fevsexact">2.7</a>) — between them, the straight segments cut across the parabola. Nodal exactness is a lucky specialty of this 1D problem class, not a general FEM property; but “exact where it matters most, interpolated in between” is a fair caricature of how well Galerkin behaves in general.</p>
+<figure id="fig:fevsexact">
+<img src="figs/02_fig7.svg" style="width:435px" alt="" />
+<figcaption><strong>Figure 2.7.</strong> Fixed–free bar under constant distributed load: exact parabola versus the two-element solution. The nodal values coincide exactly.</figcaption>
+</figure>
+<h2 id="the-dictionary">2.13   The dictionary</h2>
+<p>One lecture with springs, one with a boundary value problem, one theory:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>Lecture 1 (springs)</strong></th>
+<th style="text-align: left;"><strong>Lecture 2 (functions)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;">spring between two nodes</td>
+<td style="text-align: left;">element: interval with linear shape functions</td>
+</tr>
+<tr>
+<td style="text-align: left;">stiffness <span class="math inline">\(k\)</span></td>
+<td style="text-align: left;"><span class="math inline">\(EA/h\)</span> from <span class="math inline">\(\int \mathbf{B}^{\mathsf{T}}EA\,\mathbf{B}\,\mathrm{d}\xi\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">elongation <span class="math inline">\(\Delta = u_2-u_1\)</span></td>
+<td style="text-align: left;">strain <span class="math inline">\(\varepsilon= \mathbf{B}\mathbf{u}^e\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">nodal forces</td>
+<td style="text-align: left;">weighted-residual right-hand side <span class="math inline">\(\int \mathbf{N}^{\mathsf{T}}n\)</span>, <span class="math inline">\(\bar F\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">assembly (add into global slots)</td>
+<td style="text-align: left;">additivity of the integral over elements</td>
+</tr>
+<tr>
+<td style="text-align: left;">fix <span class="math inline">\(u_i\)</span>, solve the rest</td>
+<td style="text-align: left;">essential BC on coefficients + partitioning</td>
+</tr>
+<tr>
+<td style="text-align: left;">free node means <span class="math inline">\(f_i=0\)</span></td>
+<td style="text-align: left;">natural BC, included by the weak form itself</td>
+</tr>
+<tr>
+<td style="text-align: left;"><span class="math inline">\(\Pi = \tfrac12\mathbf{u}^{\mathsf{T}}\mathbf{K}\mathbf{u} - \mathbf{u}^{\mathsf{T}}\mathbf{f}\)</span> minimal</td>
+<td style="text-align: left;">weak form (Galerkin <span class="math inline">\(=\)</span> minimum energy)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>Everything above happened on a line. The honest reason for all this machinery is that it transplants: in Lecture 4 the domain will be a two-dimensional region, the mesh a set of triangles, the shape functions little tents over the mesh — and <em>not one concept</em> will need to be added: ansatz, residual, weak form, <span class="math inline">\(\mathbf{B}\)</span>, <span class="math inline">\(\int\mathbf{B}^{\mathsf{T}}\mathbf{D}\,\mathbf{B}\)</span>, assembly, essential/natural conditions. Before that, Lecture 3 banks a quicker profit: taking the <em>spring</em> picture into the plane, to real trusses. And the exercise below lets you replay the whole arc of this lecture on a different physics — steady heat flow — to convince yourself the steps truly do not care about the symbols. The lectures on physics-based machine learning (Part IV) can also start right after the exercise: Lectures A and B need nothing beyond this lecture, and connect what we just built to regression, neural networks, and the physics-informed methods of current research. Lectures 3 to 6 do not depend on them.</p>
+</div>
+<section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Notation varies between books: <span class="math inline">\(n(x)\)</span>, <span class="math inline">\(p(x)\)</span> and <span class="math inline">\(q(x)\)</span> are all in use for the distributed axial load, with <span class="math inline">\(q\)</span> most often reserved for <em>transverse</em> loads on beams. We write <span class="math inline">\(n\)</span> because it pairs with the internal normal force <span class="math inline">\(N\)</span> it feeds: lowercase force per length, uppercase resultant force. In 2D and 3D the same actor returns as the body force <span class="math inline">\(\mathbf{b}\)</span>.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="01_springs_and_stiffness.html">← Lecture 1</a> <a href="02x_exercise_heat_conduction.html">Exercise 2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

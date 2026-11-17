@@ -1,0 +1,6 @@
+# Essential Concepts in FEM and Physics-Based ML -- exercise notebooks
+# Copyright (c) 2025 Ramses Sala
+numpy>=1.22
+sympy>=1.10
+matplotlib>=3.5
+jupyterlab>=3.0

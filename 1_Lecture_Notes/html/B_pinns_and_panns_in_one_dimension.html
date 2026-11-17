@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PINNs and PANNs in One Dimension — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="A_from_curve_fitting_to_neural_networks.html">← Lecture A</a> <a href="S1_worked_pinn_examples.html">Supplement S1 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture B</p>
+<h1>PINNs and PANNs in One Dimension</h1>
+<p><em>Builds on Lecture A. The subject: physics-<em>informed</em> and physics-<em>augmented</em> neural networks. We stay strictly in 1D: the bar of Lecture 2 and its thermal twin from the exercise.</em></p>
+<h2 id="sec:pinn">B.1   PINNs: the equation as the loss</h2>
+<p>A <em>physics-informed neural network</em> (PINN) solves a boundary value problem with no data at all, by an assembly of parts you already own. Take the bar problem — say Case B of Section <a href="02_boundary_value_problem.html#sec:exact">2.4</a>, generalized to a prescribed end displacement: <span class="math inline">\((EA u&#39;)&#39;
++ n = 0\)</span>, <span class="math inline">\(u(0) = \bar u\)</span>, <span class="math inline">\(N(L) = \bar F\)</span>. Choose the neural ansatz <span class="math inline">\(\tilde u(x; \mathbf{w})\)</span> of <a href="A_from_curve_fitting_to_neural_networks.html#eq:nn">(A.3)</a>. Pick a set of points <span class="math inline">\(x_1,\dots,x_m\)</span> in the domain — the PINN literature calls them, with no irony, <em>collocation points</em>. Define the loss <span id="eq:pinnloss"></span><span class="math display">\[J(\mathbf{w}) \;=\;
+  \underbrace{\frac1m \sum_{i=1}^m
+      \Bigl[\, EA\,\tilde u&#39;&#39;(x_i) + n(x_i) \,\Bigr]^2}_{\text{equation residual, squared}}
+  \;+\;
+  \underbrace{\lambda_0\bigl(\tilde u(0) - \bar u\bigr)^2
+  + \lambda_L\bigl(EA\,\tilde u&#39;(L) - \bar F\bigr)^2}_{\text{boundary conditions, as penalties}}
+  
+\tag{B.1}\]</span> and run gradient descent on <span class="math inline">\(\mathbf{w}\)</span> (Fig. <a href="B_pinns_and_panns_in_one_dimension.html#fig:pinnloop">B.1</a>). That is the whole method. The derivatives <span class="math inline">\(\tilde u&#39;\)</span>, <span class="math inline">\(\tilde u&#39;&#39;\)</span> are computed <em>exactly</em> — the network is a formula, and the chain rule differentiates formulas; this is called <em>automatic differentiation</em>, and it is the same machinery that supplies <span class="math inline">\(\nabla J\)</span>. No finite differences, no mesh. (The companion notebooks keep things transparent and compute <span class="math inline">\(\nabla J\)</span> by finite differences instead; only the <span class="math inline">\(x\)</span>-derivatives of the network are exact there.)</p>
+<figure id="fig:pinnloop">
+<img src="figs/B_fig1.svg" style="width:517px" alt="" />
+<figcaption><strong>Figure B.1.</strong> The PINN loop. Compare: ansatz (Section <a href="02_boundary_value_problem.html#sec:ansatz">2.5</a>), residual at points (Section <a href="02_boundary_value_problem.html#sec:collocation">2.6</a>), squared and summed (Section <a href="02_boundary_value_problem.html#sec:leastsq">2.7</a>), minimized by walking (Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:gd">A.5</a>).</figcaption>
+</figure>
+<p>Place it in the Lecture 2 taxonomy and the novelty shrinks to two substitutions: a PINN is <em>least-squares collocation</em> (Sections <a href="02_boundary_value_problem.html#sec:collocation">2.6</a>–<a href="02_boundary_value_problem.html#sec:leastsq">2.7</a>) with (a) a neural ansatz in place of polynomials and (b) gradient descent in place of a linear solve. The vocabulary did not even change. What <em>is</em> genuinely new is where the boundary conditions went — into the loss, as penalties. Lecture 2 never did that, and the difference deserves its own section.</p>
+<h2 id="sec:hardsoft">B.2   Boundary conditions: by construction or by persuasion</h2>
+<p>Look again at <a href="B_pinns_and_panns_in_one_dimension.html#eq:pinnloss">(B.1)</a>. The boundary terms are <em>soft</em>: the optimizer is <em>bribed</em> (with weights <span class="math inline">\(\lambda_0, \lambda_L\)</span>) into approximately honoring the supports. At any finite stage of training, <span class="math inline">\(\tilde u(0) \ne \bar u\)</span> — the wall leaks. Choosing the bribes is real work: too small, and the network solves the wrong problem; too large, and the equation term is drowned. Contrast everything we built before:</p>
+<ul>
+<li><p>In Lecture 2 we chose ansatz functions that satisfied the essential conditions <em>identically</em> — <span class="math inline">\(\varphi = x(L-x)\)</span> cannot violate <span class="math inline">\(u(0)=0\)</span> however its coefficient moves.</p></li>
+<li><p>With shape functions, the Kronecker property turned an essential condition into “set <span class="math inline">\(u_1 = \bar u\)</span>”: exact, by construction (Section <a href="02_boundary_value_problem.html#sec:shape">2.10</a>).</p></li>
+<li><p>Natural conditions never needed enforcement at all — the weak form absorbed them (Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a>).</p></li>
+</ul>
+<p>The same trick is available to networks: build the condition into the family, e.g. <span class="math display">\[\tilde u(x) = \bar u + x\cdot \mathrm{NN}(x;\mathbf{w}),\]</span> which satisfies <span class="math inline">\(\tilde u(0) = \bar u\)</span> for every <span class="math inline">\(\mathbf{w}\)</span> — a <em>hard</em> constraint (this idea is as old as 1998, older than the word PINN). It is not always easy — on a complicated 2D boundary, constructing such a multiplier function takes effort, which is exactly why penalties are popular — but the principle is worth tattooing somewhere:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>A constraint can be imposed <strong>by construction</strong> (build a family that cannot violate it) or <strong>by persuasion</strong> (penalize violations in the loss). Construction is exact, removes tuning knobs, and shrinks the search space; persuasion is flexible and easy to code, but approximate and in need of weight-balancing. FEM is a monument to the first strategy; vanilla PINNs choose the second; the best of the neural methods — Lecture B’s final section among them — move whatever they can back to the first.</p>
+</div>
+<h2 id="sec:deepritz">B.3   The energy version</h2>
+<p>PINNs as written attack the <em>strong</em> form — second derivatives, residual at points. Lecture 2 taught us the alternative road: the weak form, equivalently (for our problems) the energy. For the bar, the potential energy of a candidate <span class="math inline">\(\tilde u\)</span> is the function-space version of <span class="math inline">\(\Pi = \tfrac12\mathbf{u}^{\mathsf{T}}\mathbf{K}\mathbf{u} - \mathbf{u}^{\mathsf{T}}\mathbf{f}\)</span>: <span class="math display">\[\Pi[\tilde u] = \int_0^L \tfrac12\,EA\,(\tilde u&#39;)^2 \,\mathrm{d}x
+  - \int_0^L n\,\tilde u \,\mathrm{d}x - \bar F\,\tilde u(L),\]</span> and one can train the network by minimizing <span class="math inline">\(J(\mathbf{w}) =
+\Pi[\tilde u(\cdot;\mathbf{w})]\)</span>, the integrals evaluated by quadrature at sampled points (the method known as <em>Deep Ritz</em>). All three gifts of Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a> transfer: only <em>first</em> derivatives of the network are needed; the natural condition <span class="math inline">\(\bar F\)</span> enters by itself, as a work term; and the loss inherits the minimum structure of the physics instead of an arbitrary squared residual. The essential condition <span class="math inline">\(u(0) = \bar u\)</span> does not come for free: it must still be built in (<span class="math inline">\(\bar u + x\cdot\mathrm{NN}\)</span>) or penalized, exactly as the ansatz functions of Lecture 2 had to satisfy it. The mapping is exact: strong-form PINN <span class="math inline">\(\leftrightarrow\)</span> collocation/least squares; Deep Ritz <span class="math inline">\(\leftrightarrow\)</span> Ritz–Galerkin energy minimization. The methods table of Lecture 2 did not grow a new row; it grew a new <em>column of ansätze</em>.</p>
+<h2 id="sec:scorecard">B.4   An honest scorecard</h2>
+<p>Let us keep ourselves honest, in both directions.</p>
+<p><strong>On our bar, the comparison is a massacre.</strong> Two linear elements: one <span class="math inline">\(2\times2\)</span> solve, nodal values <em>exact</em> (Section <a href="02_boundary_value_problem.html#sec:twoelem">2.12</a>). A PINN on the same problem: thousands of gradient steps, every derivative of the loss evaluated over all collocation points at each step, to end — if training converges — near, not at, the solution, with the supports only approximately honored and no error bound in hand. For solving one well-posed PDE on a meshable domain, classical FEM is the gold standard, with a mature convergence theory (its roots go back to Ritz, 1908).</p>
+<p><strong>So why the excitement?</strong> Because the neural formulation buys freedoms FEM cannot easily offer:</p>
+<ul>
+<li><p><em>No mesh.</em> Only sampled points — valuable where meshing is the bottleneck, and in <em>high-dimensional</em> or parametric problems (solve for all loads/geometries in one family) where meshes explode combinatorially.</p></li>
+<li><p><em>Data and physics in one pot.</em> Suppose the stiffness <span class="math inline">\(EA(x)\)</span> is <em>unknown</em>, but <span class="math inline">\(u\)</span> has been measured at a few stations. Make <span class="math inline">\(EA\)</span> a second (small) network and minimize <span class="math display">\[J = \underbrace{\textstyle\frac1m\sum_i R(x_i)^2}_{\text{physics residual}}
+          \;+\; \underbrace{\textstyle\sum_d \bigl(\tilde u(x_d) - u^{\mathrm{meas}}_d\bigr)^2}_{\text{data residual}} ,\]</span> and both unknowns are trained together. The two residual notions of Lecture A — distance to the equation, distance to data — finally sit in one loss. Such <em>inverse problems</em> are where PINNs genuinely shine; classical FEM needs a separate optimization layer (adjoint methods) for the same task.</p></li>
+<li><p><em>One toolbox.</em> Autodiff frameworks and GPUs come for free from the machine-learning world.</p></li>
+</ul>
+<p>And the standing costs: a nonconvex landscape (training can stall — Fig. <a href="A_from_curve_fitting_to_neural_networks.html#fig:gd">A.3</a> was not a joke), soft boundary conditions, delicate loss-weight tuning, and guarantees that are, for now, thin where FEM’s are thick. A fair summary: <em>PINNs are not a better FEM; they are a different trade</em>, exchanging guarantees for flexibility — bought exactly where data, unknowns and physics must be mixed.</p>
+<h2 id="sec:pann">B.5   PANNs: physics moved into the architecture</h2>
+<p>The second modern method answers the keyidea of Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:hardsoft">B.2</a> more radically: move the physics itself from persuasion to construction. A <em>physics-augmented neural network</em> (PANN) does not replace the solver at all. Look once more at the three-box diagram of Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a>. Kinematics is exact geometry; balance is exact bookkeeping of forces; the one arrow that was ever empirical — remember, we said so when we drew it — is the <em>material law</em>. That is the arrow a PANN replaces (Fig. <a href="B_pinns_and_panns_in_one_dimension.html#fig:pannbox">B.2</a>): learn the material from experimental data, keep everything else classical.</p>
+<figure id="fig:pannbox">
+<img src="figs/B_fig2.svg" style="width:450px" alt="" />
+<figcaption><strong>Figure B.2.</strong> A PANN replaces exactly one arrow of the diagram — the empirical one — and leaves kinematics, balance, and the whole FEM machinery untouched.</figcaption>
+</figure>
+<p>But not with an arbitrary network: with a <em>constrained</em> one, so that the physical requirements of a material law hold exactly, for <em>any</em> value of the weights. In our 1D setting the requirements read:</p>
+<ul>
+<li><p><strong>Energy first</strong> (thermodynamic consistency): do not learn <span class="math inline">\(\sigma(\varepsilon)\)</span> directly; learn a stored-energy function <span class="math inline">\(\psi(\varepsilon)\)</span> and <em>derive</em> <span class="math inline">\(\sigma = \mathrm{d}\psi/\mathrm{d}\varepsilon\)</span> — the Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a> idea, promoted to a design rule. A stress that comes from a potential can never create energy from nothing around a loading cycle.</p></li>
+<li><p><strong>Stability</strong>: build <span class="math inline">\(\psi\)</span> as a <em>convex</em> function of <span class="math inline">\(\varepsilon\)</span> (special network architectures guarantee convexity by construction), so the tangent stiffness <span class="math inline">\(\mathrm{d}^2\psi/\mathrm{d}\varepsilon^2 \ge 0\)</span> — the learned stiffness can never turn negative, whatever the data.</p></li>
+<li><p><strong>Calibrated reference</strong>: the undeformed state should be stress- and energy-free; enforce it exactly with a correction term, <span class="math inline">\(\hat\psi(\varepsilon) = \psi(\varepsilon) - \psi(0) - \psi&#39;(0)\,\varepsilon\)</span> (subtracting a linear function preserves convexity — check!).</p></li>
+</ul>
+<p>In 2D and 3D the list grows (frame-indifference, material symmetry, polyconvexity), but the strategy is identical: every item moved into the architecture is one item the training data need not teach and the optimizer cannot violate. The weights are then fitted to measured stress–strain data by minimizing <span class="math inline">\(\sum_d (\hat\sigma(\varepsilon_d) - \sigma_d^{\mathrm{meas}})^2\)</span> — which is, closing the circle, plain nonlinear regression from Lecture A. And once trained, <span class="math inline">\(\hat\psi\)</span> is handed to a completely classical simulation: the element integrals <span class="math inline">\(\int \mathbf{B}^{\mathsf{T}}(\cdot)\mathbf{B}\)</span> of <a href="02_boundary_value_problem.html#eq:kpattern">(2.16)</a> simply call the network (and its derivative) where they used to call Hooke’s law. PANNs live <em>inside</em> FEM, as its material subroutine.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p>The division of labor could not be cleaner, and the three-box diagram is what makes it visible: a <strong>PINN</strong> replaces the <em>solver</em> (the dashed inverse arrow) and keeps the physics in the loss; a <strong>PANN</strong> replaces one <em>physical box</em> (the empirical one) and keeps the classical solver. The diagram earns its keep: it tells you precisely which part of the problem each method trusts to a network — and Lecture 4 (Section <a href="04_plane_elasticity_and_triangles.html#sec:pattern">4.7</a>) gives the diagram its proper name and shows its reach across physics.</p>
+</div>
+<h2 id="b.6-the-grand-dictionary-and-the-road-back">B.6   The grand dictionary, and the road back</h2>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>FEM (L. 1–2)</strong></th>
+<th style="text-align: left;"><strong>regression (L. A)</strong></th>
+<th style="text-align: left;"><strong>PINN (L. B)</strong></th>
+<th style="text-align: left;"><strong>PANN (L. B)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">given</td>
+<td style="text-align: left;">equation + BCs</td>
+<td style="text-align: left;">data</td>
+<td style="text-align: left;">equation + BCs (+ data)</td>
+<td style="text-align: left;">data for the material; equations for the rest</td>
+</tr>
+<tr>
+<td style="text-align: left;">family</td>
+<td style="text-align: left;">fixed shape functions</td>
+<td style="text-align: left;">chosen features</td>
+<td style="text-align: left;">neural network</td>
+<td style="text-align: left;">constrained network for <span class="math inline">\(\psi\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">parameters</td>
+<td style="text-align: left;">nodal values</td>
+<td style="text-align: left;">coefficients</td>
+<td style="text-align: left;">weights</td>
+<td style="text-align: left;">weights</td>
+</tr>
+<tr>
+<td style="text-align: left;">residual minimized</td>
+<td style="text-align: left;">weighted equation residual</td>
+<td style="text-align: left;">data misfit</td>
+<td style="text-align: left;">equation residual at points (+ data misfit)</td>
+<td style="text-align: left;">stress-data misfit</td>
+</tr>
+<tr>
+<td style="text-align: left;">BCs / constraints</td>
+<td style="text-align: left;">by construction + weak form</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">penalties (or construction)</td>
+<td style="text-align: left;">physics by construction</td>
+</tr>
+<tr>
+<td style="text-align: left;">solved by</td>
+<td style="text-align: left;">one linear solve</td>
+<td style="text-align: left;">one linear solve</td>
+<td style="text-align: left;">gradient descent</td>
+<td style="text-align: left;">gradient descent, then classical FEM</td>
+</tr>
+<tr>
+<td style="text-align: left;">guarantees</td>
+<td style="text-align: left;">convergence theory</td>
+<td style="text-align: left;">classical statistics</td>
+<td style="text-align: left;">few, active research</td>
+<td style="text-align: left;">constraints exact; fit empirical</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>One table, four columns, and every row filled with concepts from Lectures 1–2: ansatz, residual, conjugate boundary data, energy, minimization. That was the point of the detour — the modern methods are not a different subject, but new coordinates in a space you already knew how to navigate. If you want to read further, the entry points are: Lagaris et al. (1998) for networks with hard boundary conditions; Raissi, Perdikaris &amp; Karniadakis (2019), who coined <em>PINN</em>; E &amp; Yu (2018) for Deep Ritz; and Linden et al. (2023) for a guide to physics-augmented constitutive networks.</p>
+<div class="exercisebox">
+<div class="boxtitle">
+<p>Worked supplements and companion exercises</p>
+</div>
+<ul>
+<li><p><strong>Supplement S1</strong> — <em>Worked PINN Examples in One Dimension</em>: six examples from a one-parameter PINN traced by hand to the detection of a hidden damage zone. Implemented in Exercise B1 (<code>Exercise_B1_PINN.ipynb</code>).</p></li>
+<li><p><strong>Supplement S2</strong> — <em>Worked PANN Examples in One Dimension</em>: Hooke’s law as the smallest PANN, constraints proved with a pencil, constrained versus unconstrained networks, and a learned material inside a Newton solver. Implemented in Exercise B2 (<code>Exercise_B2_PANN.ipynb</code>).</p></li>
+<li><p><strong>Exercise B3</strong> (<code>Exercise_B3_Transfer.ipynb</code>) transfers both methods to new equations: a cooling fin, a beam, and an eigenvalue problem.</p></li>
+</ul>
+<p>All three notebooks come with separate sample-solution notebooks.</p>
+</div>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>End of the detour. If you took it straight after Exercise 2, the classical road resumes with Lecture 3, which takes the spring picture into the plane — real trusses, with angles — and Lecture 4, which brings the full Lecture 2 machinery to two-dimensional continua, where neither springs nor networks but <em>triangles</em> are the natural next element. The worked supplements S1 and S2 follow next in print; Lecture C picks up the network thread again once Lecture 4 is behind you.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="A_from_curve_fitting_to_neural_networks.html">← Lecture A</a> <a href="S1_worked_pinn_examples.html">Supplement S1 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

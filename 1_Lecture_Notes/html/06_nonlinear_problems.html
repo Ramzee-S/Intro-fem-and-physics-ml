@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nonlinear Problems and Newton&#x27;s Method — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="05_mass_damping_and_time.html">← Lecture 5</a> <a href="A_from_curve_fitting_to_neural_networks.html">Lecture A →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture 6</p>
+<h1>Nonlinear Problems and Newton&#x27;s Method</h1>
+<h2 id="what-linear-meant-and-three-ways-to-lose-it">6.1   What “linear” meant, and three ways to lose it</h2>
+<p>Everything so far rested on one equation, <span class="math inline">\(\mathbf{K}\mathbf{u} = \mathbf{f}\)</span>, with a matrix <span class="math inline">\(\mathbf{K}\)</span> that did not depend on the answer. Double the load, and the displacements double; solve two load cases, and their sum solves the summed load. This comfort was bought with three assumptions, made so quietly in Lecture 1 that they were easy to miss:</p>
+<ol>
+<li><p><strong>The material is linear</strong>: stress proportional to strain, however large.</p></li>
+<li><p><strong>Displacements are small</strong>: equilibrium may be written for the undeformed shape, and strain is the simple <span class="math inline">\(\mathrm{d}u/\mathrm{d}x\)</span>.</p></li>
+<li><p><strong>The boundary conditions are fixed in advance</strong>: we know beforehand which nodes are supported and which are free.</p></li>
+</ol>
+<p>Give up any one and the problem becomes <em>nonlinear</em>. The three cases have names: <em>material</em> nonlinearity (rubber, plastic yielding, concrete cracking), <em>geometric</em> nonlinearity (cables, thin shells, anything that moves or rotates far), and <em>contact</em> (a gap that closes, a tyre on a road). Real problems often contain all three; a car crash certainly does.</p>
+<p>What is lost is superposition, and with it the luxury of one linear solve. What is <em>not</em> lost — and this is the message of the lecture — is everything we know about linear problems, because the method for nonlinear problems is to solve a sequence of linear ones.</p>
+<h2 id="sec:residual">6.2   The new shape of the problem</h2>
+<p>Start, as always, with one spring — but a spring that stiffens as it stretches, <span class="math display">\[f_{\mathrm{int}}(u) = k\,u + \beta\,u^3 .\]</span> The subscript says <em>internal</em> force: what the spring answers when stretched by <span class="math inline">\(u\)</span>. Equilibrium still means that this answer balances the applied load. We write it as a <em>residual</em>, the out-of-balance force, which must vanish: <span id="eq:nlres"></span><span class="math display">\[r(u) = f_{\mathrm{int}}(u) - f_{\mathrm{ext}} = 0 .
+  
+\tag{6.1}\]</span></p>
+<p>There are two directions in which to read this equation, and they are very different in difficulty. <em>Given</em> <span class="math inline">\(u\)</span>, the force is found by evaluating a formula: trivial. <em>Given</em> the force, finding <span class="math inline">\(u\)</span> means <em>inverting</em> the function <span class="math inline">\(f_{\mathrm{int}}\)</span> — and here lies the whole difficulty of nonlinear analysis:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>A linear function is inverted by a division: <span class="math inline">\(u = f/k\)</span>. A nonlinear function, in general, has <strong>no inverse that can be written down</strong>. The few cases with a named inverse — <span class="math inline">\(x^2\)</span> and the square root, <span class="math inline">\(e^x\)</span> and the logarithm — are the exceptions that school has made familiar, not the rule; and for a system of many coupled nonlinear equations there is no hope at all. What we can always do is <em>evaluate</em>: the residual for a guessed <span class="math inline">\(u\)</span>, and its slope. Nonlinear solution methods are ways of turning evaluation into inversion, by iteration.</p>
+</div>
+<h2 id="sec:newton">6.3   Newton’s method</h2>
+<p>Suppose we have a guess <span class="math inline">\(u^{(i)}\)</span> that does not satisfy equilibrium: <span class="math inline">\(r(u^{(i)}) \ne 0\)</span>. Near the guess, replace the curve by its tangent — a straight line, and straight lines we can solve: <span class="math display">\[r\bigl(u^{(i)} + \Delta u\bigr) \approx r\bigl(u^{(i)}\bigr) + k_t\,\Delta u = 0,
+  \qquad
+  k_t = \frac{\mathrm{d}f_{\mathrm{int}}}{\mathrm{d}u}\bigg|_{u^{(i)}} .\]</span> The slope <span class="math inline">\(k_t\)</span> is the <em>tangent stiffness</em>: the stiffness the structure shows to a small additional load in its current state. Solving the linearized equation gives the correction, and the procedure repeats: <span id="eq:newton"></span><span class="math display">\[\boxed{\;k_t\,\Delta u = -\,r\bigl(u^{(i)}\bigr), \qquad
+  u^{(i+1)} = u^{(i)} + \Delta u .\;}
+  
+\tag{6.2}\]</span> Look at the first equation: stiffness times displacement equals force. <em>Each Newton iteration is a linear spring problem from Lecture 1</em>, with the tangent stiffness as the spring and the out-of-balance force as the load (Fig. <a href="06_nonlinear_problems.html#fig:newton">6.1</a>).</p>
+<figure id="fig:newton">
+<img src="figs/06_fig1.svg" style="width:435px" alt="" />
+<figcaption><strong>Figure 6.1.</strong> Newton’s method on the stiffening spring: follow the tangent to the load level, evaluate the true internal force there, repeat.</figcaption>
+</figure>
+<h5 id="by-hand.">By hand.</h5>
+<p>Take <span class="math inline">\(k = \beta = 1\)</span> and <span class="math inline">\(f_{\mathrm{ext}} = 2\)</span>, so that we solve <span class="math inline">\(u + u^3 = 2\)</span>; the answer is <span class="math inline">\(u = 1\)</span>, which lets us watch the error. Then <span class="math inline">\(r = u + u^3 - 2\)</span> and <span class="math inline">\(k_t = 1 + 3u^2\)</span>. Starting from the unloaded state: <span class="math display">\[\begin{array}{c|cccccc}
+\text{iteration} &amp; 0 &amp; 1 &amp; 2 &amp; 3 &amp; 4 &amp; 5\\\hline
+u &amp; 0 &amp; 2 &amp; 1.3846 &amp; 1.0826 &amp; 1.0048 &amp; 1.00002\\
+r(u) &amp; -2 &amp; 8 &amp; 2.039 &amp; 0.351 &amp; 0.019 &amp; 0.00007\\
+k_t &amp; 1 &amp; 13 &amp; 6.75 &amp; 4.52 &amp; 4.03 &amp; 4.00\\
+\text{error} &amp; 1 &amp; 1 &amp; 0.38 &amp; 0.083 &amp; 0.0048 &amp; 0.00002
+\end{array}\]</span> The first step is the linear solution, <span class="math inline">\(u = f/k = 2\)</span> — a poor guess, because the spring is much stiffer out there. But watch the last three errors: <span class="math inline">\(0.083\)</span>, <span class="math inline">\(0.0048\)</span>, <span class="math inline">\(0.00002\)</span>. Once close, each iteration roughly <em>squares</em> the error; the number of correct digits doubles. This <em>quadratic convergence</em> is the signature of Newton’s method and the reason it dominates nonlinear computation. In practice one stops when the residual is small compared with the applied load.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>A digression: square roots without a square-root key.</strong> Even the “named” inverses are computed this way. To find <span class="math inline">\(\sqrt a\)</span>, solve <span class="math inline">\(r(x) = x^2 - a = 0\)</span> by Newton: the slope is <span class="math inline">\(2x\)</span>, so <span class="math inline">\(x \leftarrow x - (x^2-a)/(2x)\)</span>, that is <span class="math display">\[x \;\leftarrow\; \tfrac12\Bigl(x + \frac{a}{x}\Bigr) :\]</span> average your guess with <span class="math inline">\(a\)</span> divided by your guess. For <span class="math inline">\(\sqrt2\)</span>, starting from <span class="math inline">\(1\)</span>: <span class="math inline">\(\;1,\ 1.5,\ 1.41667,\ 1.4142157,\ 1.4142135624\)</span> — ten correct digits after four steps, using nothing but division and averaging. The rule was known in Babylon; a pocket calculator does essentially the same.</p>
+</div>
+<h2 id="load-steps">6.4   Load steps</h2>
+<p>Newton’s method converges fast <em>near</em> the solution; from far away it may wander or fail. The remedy is as simple as it is useful: do not apply the whole load at once. Apply it in <em>increments</em> — ten percent, twenty, thirty — and at each level iterate to equilibrium, starting from the converged state of the level before, which is already close. This is the stepping idea of Lecture 5 with the load level playing the role of time. It also yields what an engineer usually wants anyway: not one point but the whole <em>load–displacement curve</em>.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p>Computing and factorizing a new tangent in every iteration is the expensive part for large models. <em>Modified Newton</em> keeps the tangent of an earlier iteration for a while: each iteration becomes cheap, at the price of more iterations (the convergence is no longer quadratic) — or, if the true stiffness has grown well beyond the frozen one, no convergence at all. Which is faster depends on the problem.</p>
+</div>
+<h2 id="sec:nlmdof">6.5   Several degrees of freedom</h2>
+<p>With several nodes everything becomes a vector or a matrix, by the assembly of Lecture 1 — with one change of habit. In a linear problem we assembled the stiffness matrix and never looked at element forces until post-processing. Now the element forces come first:</p>
+<ul>
+<li><p>The <strong>internal force vector</strong> <span class="math inline">\(\mathbf{f}_{\mathrm{int}}(\mathbf{u})\)</span> is assembled from the elements: each spring, stretched by its current elongation <span class="math inline">\(\Delta\)</span>, carries the force <span class="math inline">\(N(\Delta)\)</span>; it adds <span class="math inline">\(-N\)</span> to the entry of its first node and <span class="math inline">\(+N\)</span> to that of its second. (<span class="math inline">\(\mathbf{f}_{\mathrm{int}}\)</span> is the force the nodes must apply to hold the spring stretched — the opposite of the spring’s pull on them.)</p></li>
+<li><p>The <strong>residual</strong> is <span class="math inline">\(\mathbf{r}(\mathbf{u}) = \mathbf{f}_{\mathrm{int}}(\mathbf{u}) - \mathbf{f}_{\mathrm{ext}}\)</span>, one out-of-balance force per degree of freedom.</p></li>
+<li><p>The <strong>tangent stiffness matrix</strong> <span class="math inline">\(\mathbf{K}_T\)</span> is assembled from the element tangents <span class="math inline">\(k_t^e\left[\begin{smallmatrix}1&amp;-1\\-1&amp;1\end{smallmatrix}\right]\)</span> with <span class="math inline">\(k_t^e = \mathrm{d}N/\mathrm{d}\Delta\)</span> at the element’s current elongation — the assembly rule of Lecture 1, with current stiffnesses.</p></li>
+<li><p><strong>Newton</strong>: solve <span class="math inline">\(\mathbf{K}_T\,\Delta\mathbf{u} = -\mathbf{r}\)</span>, update <span class="math inline">\(\mathbf{u} \leftarrow \mathbf{u} + \Delta\mathbf{u}\)</span>, repeat.</p></li>
+</ul>
+<h5 id="worked-example.">Worked example.</h5>
+<p>Three springs in a row between two walls, two free nodes (Fig. <a href="06_nonlinear_problems.html#fig:nlchain">6.2</a>). Spring 1 stiffens, <span class="math inline">\(N_1 = \Delta + \Delta^3\)</span>; springs 2 and 3 are linear with <span class="math inline">\(k = 1\)</span>. A force <span class="math inline">\(2.5\)</span> acts on node 1. This structure is statically indeterminate — how the load divides between the left and the right path depends on the stiffnesses, which depend on the answer — so there is no shortcut.</p>
+<figure id="fig:nlchain">
+<img src="figs/06_fig2.svg" style="width:365px" alt="" />
+<figcaption><strong>Figure 6.2.</strong> Three springs between two walls; only the first is nonlinear.</figcaption>
+</figure>
+<p>With elongations <span class="math inline">\(\Delta_1 = u_1\)</span>, <span class="math inline">\(\Delta_2 = u_2-u_1\)</span>, <span class="math inline">\(\Delta_3 = -u_2\)</span>: <span class="math display">\[\mathbf{f}_{\mathrm{int}} = \begin{bmatrix} N_1 - N_2\\ N_2 - N_3\end{bmatrix}
+  = \begin{bmatrix} u_1 + u_1^3 - (u_2-u_1)\\ (u_2 - u_1) + u_2 \end{bmatrix},
+  \qquad
+  \mathbf{K}_T = \begin{bmatrix} (1 + 3u_1^2) + 1 &amp; -1\\ -1 &amp; 2\end{bmatrix}.\]</span> Only one entry of <span class="math inline">\(\mathbf{K}_T\)</span> changes during the iteration: the one fed by the nonlinear element. Newton from <span class="math inline">\(\mathbf{u} = \mathbf{0}\)</span>: <span class="math display">\[\begin{array}{c|ccccc}
+\text{iteration} &amp; 0 &amp; 1 &amp; 2 &amp; 3 &amp; 4\\\hline
+u_1 &amp; 0 &amp; 1.6667 &amp; 1.1959 &amp; 1.0225 &amp; 1.0003\\
+u_2 &amp; 0 &amp; 0.8333 &amp; 0.5979 &amp; 0.5112 &amp; 0.5002\\
+r_1 &amp; -2.5 &amp; 4.630 &amp; 1.004 &amp; 0.103 &amp; 0.0015\\
+k_t \text{ of spring 1} &amp; 1 &amp; 9.33 &amp; 5.29 &amp; 4.14 &amp; 4.00\\
+N_1 &amp; 0 &amp; 6.30 &amp; 2.91 &amp; 2.09 &amp; 2.00
+\end{array}\]</span> It converges to <span class="math inline">\(\mathbf{u} = (1,\ 0.5)\)</span>. Read the physics off the last row: spring 1 ends up carrying <span class="math inline">\(N_1 = 2\)</span> of the <span class="math inline">\(2.5\)</span>, and springs 2 and 3 only <span class="math inline">\(0.5\)</span>. The <em>linear</em> solution (iteration 1) would have predicted a displacement of <span class="math inline">\(1.67\)</span> and a share of <span class="math inline">\(1.67\)</span> for spring 1. The stiffening spring attracts load — a redistribution that no linear analysis, however fine its mesh, can show.</p>
+<h2 id="material-nonlinearity-in-a-bar">6.6   Material nonlinearity in a bar</h2>
+<p>For a bar element the nonlinear spring has a name: the material’s stress–strain curve <span class="math inline">\(\sigma(\varepsilon)\)</span>. The element force is <span class="math inline">\(N = A\,\sigma(\varepsilon)\)</span> with <span class="math inline">\(\varepsilon= \Delta/h\)</span>, and the element tangent is <span class="math display">\[k_t^e = \frac{E_t\,A}{h}, \qquad E_t = \frac{\mathrm{d}\sigma}{\mathrm{d}\varepsilon},\]</span> the familiar <span class="math inline">\(EA/h\)</span> with the <em>tangent modulus</em> in place of Young’s modulus. Nothing else in Section <a href="06_nonlinear_problems.html#sec:nlmdof">6.5</a> changes. (Supplement S2 in Part IV runs exactly this Newton loop with a stress–strain law learned from data.)</p>
+<p>One warning for later study. A rubber band follows the same curve when unloaded: it is nonlinear but <em>elastic</em>. A steel bar stretched beyond yield does not: on unloading it follows a different, steeper path and stays permanently longer. Its stress depends not only on the current strain but on the <em>history</em> of straining. That is <em>plasticity</em>; the Newton loop survives, but the material law needs memory, and that is a subject of its own.</p>
+<h2 id="sec:measures">6.7   Large deformations: which strain, which stress?</h2>
+<p>When deformations are no longer small, the innocent definitions of Lecture 2 split into several, and it matters which one is meant. One bar is enough to see everything. It has length <span class="math inline">\(L_0\)</span> and cross-section <span class="math inline">\(A_0\)</span> before loading, and <span class="math inline">\(L\)</span> and <span class="math inline">\(A\)</span> under the force <span class="math inline">\(F\)</span> (Fig. <a href="06_nonlinear_problems.html#fig:configs">6.3</a>). Its <em>stretch</em> is <span class="math inline">\(\lambda = L/L_0\)</span>.</p>
+<figure id="fig:configs">
+<img src="figs/06_fig3.svg" style="width:431px" alt="" />
+<figcaption><strong>Figure 6.3.</strong> One bar, two configurations. Every strain and stress measure is a choice of which lengths and which areas to refer to.</figcaption>
+</figure>
+<h5 id="strain.">Strain.</h5>
+<p>All of the following measure the same deformation: <span class="math display">\[\varepsilon_{\mathrm{eng}} = \frac{L-L_0}{L_0} = \lambda - 1,
+  \qquad
+  \varepsilon_{\mathrm{G}} = \frac{L^2 - L_0^2}{2L_0^2} = \tfrac12(\lambda^2-1),
+  \qquad
+  \varepsilon_{\ln} = \ln\frac{L}{L_0} = \ln\lambda .\]</span> The <em>engineering</em> strain refers the elongation to the original length. The <em>Green–Lagrange</em> strain compares squared lengths — which sounds odd but is what makes it insensitive to rigid rotation in 2D and 3D, and why large-displacement finite element formulations favour it. The <em>logarithmic</em> (true) strain adds up small elongations, each referred to the current length.</p>
+<h5 id="stress.">Stress.</h5>
+<p>The same force can be divided by different areas: <span class="math display">\[\begin{align*}
+  P &amp;= \frac{F}{A_0} &amp;&amp; \text{nominal (engineering) stress,}\\
+  \sigma &amp;= \frac{F}{A} &amp;&amp; \text{true (Cauchy) stress,}\\
+  S &amp;= \frac{P}{\lambda} &amp;&amp; \text{second Piola--Kirchhoff stress.}
+\end{align*}\]</span> The nominal stress is what a tensile test reports (force over the original area); the true stress is what the material actually feels; <span class="math inline">\(S\)</span> has no direct physical picture — it is the partner that the Green–Lagrange strain requires, as we see next.</p>
+<h5 id="a-number.">A number.</h5>
+<p>Stretch a rubber-like bar to <span class="math inline">\(\lambda = 1.5\)</span> with a nominal stress <span class="math inline">\(P = 100\)</span> MPa. Rubber keeps its volume, so <span class="math inline">\(A = A_0/\lambda\)</span>. Then:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: center;">engineering / nominal</th>
+<th style="text-align: center;">Green–Lagrange / 2nd P.–K.</th>
+<th style="text-align: center;">logarithmic / true</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">strain</td>
+<td style="text-align: center;"><span class="math inline">\(0.500\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.625\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.405\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">stress</td>
+<td style="text-align: center;"><span class="math inline">\(100\)</span> MPa</td>
+<td style="text-align: center;"><span class="math inline">\(66.7\)</span> MPa</td>
+<td style="text-align: center;"><span class="math inline">\(150\)</span> MPa</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Three honest answers to “what is the strain?” and “what is the stress?”, with stresses differing by more than a factor of two. For the small strains of the earlier lectures — say <span class="math inline">\(\lambda = 1.001\)</span> — all three strains are <span class="math inline">\(0.001\)</span> and all three stresses agree to within a few tenths of a percent, which is why we never had to choose.</p>
+<h5 id="conjugate-pairs-again.">Conjugate pairs, again.</h5>
+<p>The measures cannot be combined at will. In Lecture 1, force and displacement were partners because their product is work. The same test sorts stresses and strains. The work done on the bar per unit of original volume, for a small increase of stretch, is <span class="math inline">\(P\,\mathrm{d}\lambda\)</span> (force <span class="math inline">\(F = PA_0\)</span> times <span class="math inline">\(\mathrm{d}L = L_0\,\mathrm{d}\lambda\)</span>, divided by <span class="math inline">\(A_0L_0\)</span>). Now check the other two pairs: <span class="math display">\[S\,\mathrm{d}\varepsilon_{\mathrm{G}} = \frac{P}{\lambda}\cdot\lambda\,\mathrm{d}\lambda = P\,\mathrm{d}\lambda,
+  \qquad
+  \sigma\,\mathrm{d}\varepsilon_{\ln} = \lambda P\cdot\frac{\mathrm{d}\lambda}{\lambda} = P\,\mathrm{d}\lambda .\]</span> (The last uses the constant volume; in general a factor <span class="math inline">\(A L/(A_0 L_0)\)</span> appears.) Each column of the table is a <em>work-conjugate pair</em>: the same work, three ways to split it into a stress and a strain.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>At large deformation, “stress” and “strain” are not single quantities but families — and a stress measure must be used with <em>its</em> strain measure. A material law fitted as true stress against logarithmic strain gives wrong forces if evaluated with engineering strain. When reading a material data sheet or a solver manual, the first question is: which pair?</p>
+</div>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Geometric nonlinearity proper</strong> — equilibrium written for the deformed shape, structures that snap through or buckle, loads that can no longer be increased — needs one more idea than this lecture has room for: the tangent stiffness acquires a part that depends on the forces already in the structure, and it can become zero. That is left for a planned later lecture (not yet part of these notes), built on a shallow truss of two bars.</p>
+</div>
+<h2 id="sec:contact">6.8   Contact: a constraint that switches on</h2>
+<p>The third nonlinearity is the strangest, because every piece of it is linear. Take the two-spring chain of Lecture 1 (<span class="math inline">\(k_1 = k_2 = 1\)</span>, node 1 fixed; we keep the numbering of Lecture 1, so the free nodes are 2 and 3) and put a rigid stop at a distance <span class="math inline">\(g = 4\)</span> in front of the last node (Fig. <a href="06_nonlinear_problems.html#fig:gap">6.4</a>). A force <span class="math inline">\(F\)</span> pushes that node toward the stop.</p>
+<figure id="fig:gap">
+<img src="figs/06_fig4.svg" style="width:327px" alt="" />
+<figcaption><strong>Figure 6.4.</strong> A rigid stop in front of node 3. If the node reaches it, the stop pushes back with the contact force <span class="math inline">\(\lambda\)</span>.</figcaption>
+</figure>
+<p>The stop imposes two conditions that cannot be written as equations: the node cannot pass through, <span class="math inline">\(u_3 \le g\)</span>; and the stop can only push, not pull, <span class="math inline">\(\lambda \ge 0\)</span>. Moreover, either there is a gap and no force, or there is a force and no gap: <span class="math display">\[u_3 \le g, \qquad \lambda \ge 0, \qquad \lambda\,(g - u_3) = 0 .\]</span> Compare with the rule of Lecture 1: at every degree of freedom, either the displacement is prescribed and the force unknown, or the reverse. That rule still holds here. What is new is that <em>we do not know in advance which of the two cases applies</em> — it depends on the solution. That is the nonlinearity, even though each case by itself is linear.</p>
+<h5 id="try-without-contact.">Try without contact.</h5>
+<p>For <span class="math inline">\(F = 3\)</span>, the free chain gives <span class="math inline">\(u_2 = 3\)</span>, <span class="math inline">\(u_3 = 6\)</span>: the node would sit two units inside the stop. So the contact is active, and <span class="math inline">\(u_3 = g = 4\)</span> must be enforced. There are two standard ways. (Readers of Lecture B will recognize the two strategies that Lecture B calls <em>persuasion</em> and <em>construction</em>.)</p>
+<h5 id="way-1-the-penalty-method.">Way 1: the penalty method.</h5>
+<p>Replace the rigid stop by a very stiff spring <span class="math inline">\(k_p\)</span> that acts only when the node penetrates. For an active contact this adds <span class="math inline">\(k_p\)</span> to the stiffness and <span class="math inline">\(k_p\,g\)</span> to the load of node 3: <span class="math display">\[\begin{bmatrix} 2 &amp; -1\\ -1 &amp; 1 + k_p\end{bmatrix}
+  \begin{bmatrix} u_2\\ u_3\end{bmatrix}
+  = \begin{bmatrix} 0\\ F + k_p\,g\end{bmatrix}
+  \quad\xrightarrow{\;k_p = 100\;}\quad
+  u_2 = 2.005,\quad u_3 = 4.010 .\]</span> The node penetrates the stop by <span class="math inline">\(0.00995 \approx 0.01\)</span>, and the contact force is <span class="math inline">\(k_p\times 0.00995 = 0.995\)</span>. Simple — the system keeps its size and its character — but approximate: a larger <span class="math inline">\(k_p\)</span> reduces the penetration and makes the matrix worse conditioned. The engineer chooses.</p>
+<h5 id="way-2-a-lagrange-multiplier.">Way 2: a Lagrange multiplier.</h5>
+<p>Enforce <span class="math inline">\(u_3 = g\)</span> exactly, and make the unknown contact force <span class="math inline">\(\lambda\)</span> an unknown of the system (<span class="math inline">\(\lambda\)</span> now denotes this force, not the stretch of Section <a href="06_nonlinear_problems.html#sec:measures">6.7</a>). The stop pushes node 3 back, so <span class="math inline">\(\lambda\)</span> enters the equilibrium of node 3; and the constraint itself becomes an additional equation: <span id="eq:lagrange"></span><span class="math display">\[\underbrace{\begin{bmatrix}
+    2 &amp; -1 &amp; 0\\
+    -1 &amp; 1 &amp; 1\\
+    0 &amp; 1 &amp; 0
+  \end{bmatrix}}_{\begin{bmatrix}\mathbf{K} &amp; \mathbf{B}^{\mathsf{T}}\\ \mathbf{B} &amp; \mathbf{0}\end{bmatrix}}
+  \begin{bmatrix} u_2\\ u_3\\ \lambda\end{bmatrix}
+  =
+  \begin{bmatrix} 0\\ F\\ g\end{bmatrix}
+  =
+  \begin{bmatrix} 0\\ 3\\ 4\end{bmatrix}.
+  
+\tag{6.3}\]</span> The third row says <span class="math inline">\(u_3 = 4\)</span>. The first then gives <span class="math inline">\(u_2 = 2\)</span>, and the second <span class="math inline">\(-2 + 4 + \lambda = 3\)</span>, hence <span class="math display">\[u_2 = 2, \qquad u_3 = 4, \qquad \lambda = 1 .\]</span> No penetration, and the contact force comes out exactly: of the load <span class="math inline">\(3\)</span>, the springs carry <span class="math inline">\(2\)</span> and the stop carries <span class="math inline">\(1\)</span>. The penalty answer (<span class="math inline">\(0.995\)</span>) was heading there.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>The Lagrange multiplier is the force that enforces the constraint.</strong> It is the conjugate partner of the constrained displacement — the <em>reaction force</em> of Lecture 1, promoted from a quantity recovered afterwards to an unknown of the system. In general: constraints <span class="math inline">\(\mathbf{B}\mathbf{u} = \mathbf{g}\)</span> are enforced exactly by the enlarged system in <a href="06_nonlinear_problems.html#eq:lagrange">(6.3)</a>, with one multiplier per constraint.</p>
+</div>
+<p>Two prices are paid. The system grows by one unknown per constraint; and it has a zero on its diagonal — it no longer describes the minimum of an energy but a minimum <em>subject to a condition</em> (mathematicians call it a saddle point), and solvers must be prepared for that.</p>
+<h5 id="and-when-is-the-constraint-active">And when is the constraint active?</h5>
+<p>The sign of the multiplier answers. Repeat with <span class="math inline">\(F = 1.5\)</span>. The free solution is <span class="math inline">\(u_3 = 3 &lt; g\)</span>: no contact, done. Had we imposed the constraint anyway, <a href="06_nonlinear_problems.html#eq:lagrange">(6.3)</a> would return <span class="math inline">\(\lambda = -0.5\)</span>: the stop would have to <em>pull</em> the node toward itself, which a stop cannot do. A negative multiplier means: release this constraint. Contact algorithms are loops of exactly this kind — assume a set of active contacts, solve, release those with <span class="math inline">\(\lambda &lt; 0\)</span>, add those that penetrate, repeat until nothing changes.</p>
+<h2 id="the-recipe-extended">6.9   The recipe, extended</h2>
+<div class="recipe">
+<div class="boxtitle">
+<p>The nonlinear recipe</p>
+</div>
+<ol>
+<li><p>Choose a load level (a fraction of the total load).</p></li>
+<li><p>From the current displacements, compute element by element the internal forces and the element tangents; assemble <span class="math inline">\(\mathbf{f}_{\mathrm{int}}\)</span> and <span class="math inline">\(\mathbf{K}_T\)</span>.</p></li>
+<li><p>Residual: <span class="math inline">\(\mathbf{r} = \mathbf{f}_{\mathrm{int}} - \mathbf{f}_{\mathrm{ext}}\)</span>. If it is small compared with the load: converged; go to the next load level.</p></li>
+<li><p>Otherwise solve the <em>linear</em> problem <span class="math inline">\(\mathbf{K}_T\,\Delta\mathbf{u} = -\mathbf{r}\)</span> (boundary conditions as in Lecture 1), update <span class="math inline">\(\mathbf{u} \leftarrow \mathbf{u} + \Delta\mathbf{u}\)</span>, and return to step 2.</p></li>
+<li><p>With contact: after convergence, check the signs of the contact forces and the gaps; change the set of active contacts if necessary and iterate again.</p></li>
+</ol>
+</div>
+<p>Steps 2 and 4 are the linear finite element method, untouched: element contributions, assembly, boundary conditions, a linear solve. Nonlinear analysis does not replace that machinery; it <em>calls</em> it, again and again.</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>linear</strong></th>
+<th style="text-align: left;"><strong>nonlinear</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><span class="math inline">\(\mathbf{K}\mathbf{u} = \mathbf{f}\)</span></td>
+<td style="text-align: left;"><span class="math inline">\(\mathbf{f}_{\mathrm{int}}(\mathbf{u}) = \mathbf{f}_{\mathrm{ext}}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">stiffness matrix, constant</td>
+<td style="text-align: left;">tangent stiffness, recomputed</td>
+</tr>
+<tr>
+<td style="text-align: left;">one solve</td>
+<td style="text-align: left;">load steps, each with Newton iterations</td>
+</tr>
+<tr>
+<td style="text-align: left;">superposition of load cases</td>
+<td style="text-align: left;">every load combination is a new analysis</td>
+</tr>
+<tr>
+<td style="text-align: left;">element forces in post-processing</td>
+<td style="text-align: left;">element forces in every iteration</td>
+</tr>
+<tr>
+<td style="text-align: left;">supports known beforehand</td>
+<td style="text-align: left;">contact found as part of the solution</td>
+</tr>
+<tr>
+<td style="text-align: left;">one strain, one stress</td>
+<td style="text-align: left;">conjugate pairs, to be chosen consistently</td>
+</tr>
+<tr>
+<td style="text-align: left;">a solution always exists</td>
+<td style="text-align: left;">a solution may be lost, or not unique</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="exercisebox">
+<div class="boxtitle">
+<p>Companion exercise: Exercise 6</p>
+</div>
+<p>Notebook <code>Exercise_6_Nonlinear.ipynb</code>: you build the solver of this lecture — Newton’s method, assembly of internal forces and tangent stiffness for springs with arbitrary laws, load steps — and use it to check a tangent against finite differences, see what a wrong tangent does to convergence, pass a maximum load under displacement control, and solve contact with a Lagrange multiplier and an active-set loop.</p>
+</div>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>The last row deserves a remark. Newton’s method divides by the tangent stiffness, and we have quietly assumed that it stays positive. Push a shallow arch downward and its tangent stiffness falls to zero: the structure can carry no more, snaps through, and a method that raises the load step by step has nowhere to go. Following a structure through such points — and predicting them, as buckling loads — is where nonlinear analysis becomes an art, and the subject of a planned later lecture (not yet part of these notes) built on a shallow truss of two bars.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="05_mass_damping_and_time.html">← Lecture 5</a> <a href="A_from_curve_fitting_to_neural_networks.html">Lecture A →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

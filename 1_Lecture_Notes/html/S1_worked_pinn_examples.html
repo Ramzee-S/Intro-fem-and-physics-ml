@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worked PINN Examples in One Dimension — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="B_pinns_and_panns_in_one_dimension.html">← Lecture B</a> <a href="S2_worked_pann_examples.html">Supplement S2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Supplement S1</p>
+<h1>Worked PINN Examples in One Dimension</h1>
+<p><em>Supplement to Lecture B. Six worked examples, from a physics-informed network trained with a pencil to the identification of a hidden damage zone. Every example is implemented in Exercise B1; all numbers below were verified numerically.</em></p>
+<h2 id="s1.1-overview">S1.1   Overview</h2>
+<p>Lecture B described a physics-informed network as Lecture 2’s collocation method with a neural network in place of the polynomial. Here you run one: first with a pencil, on an example so small that every number can be written out, and finally on a problem where the method is the sensible tool. The way there leads through six examples, each adding one ingredient to the one before:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: center;"><strong>no.</strong></th>
+<th style="text-align: left;"><strong>example</strong></th>
+<th style="text-align: left;"><strong>what is new</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td style="text-align: left;">one-parameter ansatz, both boundary conditions built in</td>
+<td style="text-align: left;">the loss and the training loop</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td style="text-align: left;">two parameters, one boundary condition as a penalty</td>
+<td style="text-align: left;">soft constraints, a harder landscape</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td style="text-align: left;">a small tanh network</td>
+<td style="text-align: left;">a loss with no closed-form minimum</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td style="text-align: left;">two springs, measured displacements</td>
+<td style="text-align: left;">the inverse question</td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td style="text-align: left;">a bar with unknown stiffness and one measurement</td>
+<td style="text-align: left;">a data term, a trained material parameter</td>
+</tr>
+<tr>
+<td style="text-align: center;">6</td>
+<td style="text-align: left;">a bar with a hidden damage zone</td>
+<td style="text-align: left;">all of the above together</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Every example uses the bar of Lecture 2, and every result can be checked independently — against an exact solution, a statics argument, or a result from Lectures 1 and 2. Why that is possible, and what it means for problems in two dimensions, is taken up in Section <a href="S1_worked_pinn_examples.html#sec:honest">S1.4</a>.</p>
+<h2 id="s1.2-forward-problems">S1.2   Forward problems</h2>
+<p>Throughout: the fixed–free bar of Section <a href="02_boundary_value_problem.html#sec:twoelem">2.12</a>, <span class="math inline">\(EA = 1\)</span>, <span class="math inline">\(L = 1\)</span>, constant load <span class="math inline">\(n_0 = 1\)</span>, free end: <span class="math display">\[u&#39;&#39; + 1 = 0, \qquad u(0) = 0,\quad u&#39;(1) = 0,
+  \qquad u_{\mathrm{ex}}(x) = x - \tfrac{x^2}{2}.\]</span> Chosen deliberately: it is the problem the two-element FEM solved <em>exactly at the nodes</em> in one <span class="math inline">\(2\times2\)</span> solve — the benchmark every example is measured against.</p>
+<h3 id="sec:rung1">Example 1: a one-parameter PINN by hand</h3>
+<p>Take the one-parameter ansatz <span class="math display">\[\tilde u(x; a) = a\,\varphi(x), \qquad \varphi(x) = x - \tfrac{x^2}{2},\]</span> which satisfies <span class="math inline">\(\tilde u(0)=0\)</span> and <span class="math inline">\(\tilde u&#39;(1) = a(1-x)|_{x=1} = 0\)</span> for <em>every</em> <span class="math inline">\(a\)</span> — both boundary conditions are hard, built into the family (the Lecture 2 trick; also exactly what the multiplier construction <span class="math inline">\(\bar u + x\cdot\mathrm{NN}\)</span> does for networks). The residual is constant in <span class="math inline">\(x\)</span>: <span class="math display">\[R(x) = \tilde u&#39;&#39; + 1 = -a + 1,\]</span> so the collocation loss is the same whatever points we pick — a deliberate simplification: <span class="math display">\[J(a) = (1-a)^2,
+  \qquad
+  J&#39;(a) = -2(1-a).\]</span> Gradient descent, <span class="math inline">\(a^{k+1} = a^k - \eta J&#39;(a^k) = a^k + 2\eta(1-a^k)\)</span>, with <span class="math inline">\(\eta = \tfrac14\)</span> from <span class="math inline">\(a^0=0\)</span>: the error <span class="math inline">\(1-a^k\)</span> is <em>halved</em> every step, <span class="math display">\[\begin{array}{c|cccccc}
+k &amp; 0 &amp; 1 &amp; 2 &amp; 3 &amp; 4 &amp; 5\\\hline
+a^k &amp; 0 &amp; \tfrac12 &amp; \tfrac34 &amp; \tfrac78 &amp; \tfrac{15}{16} &amp; \tfrac{31}{32}\\[0.5mm]
+J(a^k) &amp; 1 &amp; \tfrac14 &amp; \tfrac1{16} &amp; \tfrac1{64} &amp; \tfrac1{256} &amp; \tfrac1{1024}
+\end{array}\]</span> — exact arithmetic, no computer, converging to <span class="math inline">\(a=1\)</span>, i.e. to <span class="math inline">\(u_{\mathrm{ex}}\)</span> itself. Every PINN ingredient is present in miniature: a parameterized ansatz, a pointwise equation residual, a squared loss, a training loop. Nothing is hidden, and you have run a PINN with a pencil.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>Nothing about “training on the physics” is mysterious: it is a loss built from an equation, and a walk downhill. What is genuinely difficult comes later, and lies elsewhere — in richer ansätze and rougher landscapes.</p>
+</div>
+<h3 id="sec:rung2">Example 2: one soft boundary condition</h3>
+<p>Now un-build one boundary condition. Ansatz <span class="math inline">\(\tilde u = a x + b x^2\)</span> (hard at <span class="math inline">\(x=0\)</span> only); the free end becomes a <em>penalty</em>: <span class="math display">\[J(a,b) = \underbrace{(2b + 1)^2}_{\text{residual }(\tilde u&#39;&#39;+1)^2}
+         + \;\lambda\,\underbrace{(a + 2b)^2}_{\text{penalty on } \tilde u&#39;(1)} ,
+  \qquad \lambda = 1 .\]</span> Still a quadratic bowl — minimum at <span class="math inline">\((a,b) = (1, -\tfrac12)\)</span>, again the exact solution — but no longer a <em>round</em> one: the penalty couples <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span>, and the bowl’s axes (eigenvalues <span class="math inline">\(0.47\)</span> and <span class="math inline">\(8.53\)</span> of the Hessian scale, ratio <span class="math inline">\(\approx 18\)</span>) are badly mismatched. Gradient descent with <span class="math inline">\(\eta = 0.1\)</span> zig-zags down the tilted valley (Fig. <a href="S1_worked_pinn_examples.html#fig:valley">S1.1</a>): fast across it, agonizingly slow along it — <span class="math inline">\(J\)</span> drops from <span class="math inline">\(1\)</span> to only <span class="math inline">\(0.08\)</span> in ten steps, and needs about sixty to reach <span class="math inline">\(10^{-5}\)</span>. Three lessons per one figure:</p>
+<ol>
+<li><p><strong>Soft constraints cost twice</strong>: the condition is only approximately satisfied at any finite step, <em>and</em> the penalty reshapes the landscape (here: conditioning <span class="math inline">\(\approx 18\)</span>, and it worsens as <span class="math inline">\(\lambda\)</span> grows — try it in Exercise B1).</p></li>
+<li><p><strong>The landscape, not the dimension, sets the pace</strong> — this two-parameter bowl already crawls.</p></li>
+<li><p><strong>The bowl is still a bowl</strong>: being quadratic, one normal-equation solve would jump straight to the minimum (Lecture A). Gradient descent is being used here only as a rehearsal for when we lose that option — which is the next example.</p></li>
+</ol>
+<figure id="fig:valley">
+<img src="figs/S1_fig1.svg" style="width:361px" alt="" />
+<figcaption><strong>Figure S1.1.</strong> Example 2: gradient descent (<span class="math inline">\(\eta=0.1\)</span>) on the soft-BC loss. The penalty tilts and stretches the bowl (contours shown); the walk zig-zags across the valley and crawls along it — about sixty steps to <span class="math inline">\(J = 10^{-5}\)</span>, where Example 1 needed nine and a linear solve needs one.</figcaption>
+</figure>
+<h3 id="example-3-one-tanh-unit">Example 3: one tanh unit</h3>
+<p>Replace the polynomial by the smallest genuine network, <span class="math inline">\(\tilde u(x) = x\cdot c\tanh(w x)\)</span> (hard essential BC via the factor <span class="math inline">\(x\)</span>). The residual is still writable by hand — <span class="math display">\[\tilde u&#39;&#39; = 2cw\,\mathrm{sech}^2(wx) - 2cw^2 x\,\tanh(wx)\,\mathrm{sech}^2(wx)\]</span> — but the loss is no longer quadratic in <span class="math inline">\((c,w)\)</span>, no formula reaches its minimum, and the walking that Examples 1–2 rehearsed becomes the only option. This is the precise cliff edge where the pencil stops and the computer takes over; Exercise B1 (Part 3) trains the <span class="math inline">\(H\)</span>-unit version and compares against <span class="math inline">\(u_{\mathrm{ex}}\)</span> and against the two-element FEM solution (which, embarrassingly for the network, is exact at the nodes).</p>
+<h2 id="s1.3-inverse-problems">S1.3   Inverse problems</h2>
+<h3 id="sec:rung4">Example 4: identifying the stiffness of a stepped bar</h3>
+<p>The discrete inverse idea, on the stepped steel bar of Lecture 1 (Section <a href="01_springs_and_stiffness.html#sec:bars">1.7</a>): we <em>know</em> the tip load <span class="math inline">\(F = 10\)</span> kN and we have <em>measured</em> <span class="math inline">\(u_2 = 0.25\)</span> mm, <span class="math inline">\(u_3 = 0.50\)</span> mm; the two spring stiffnesses are unknown. The node equations of Lecture 1, read backwards: <span class="math display">\[\begin{align*}
+  \text{node 3:}\quad &amp; k_2(u_3 - u_2) = F
+  &amp;&amp;\Rightarrow\quad k_2 = \frac{10\,\text{kN}}{0.25\,\text{mm}} = 40\,\text{MN/m},\\
+  \text{node 2:}\quad &amp; k_1 u_2 = k_2 (u_3 - u_2)
+  &amp;&amp;\Rightarrow\quad k_1 = 40\,\text{MN/m}.
+\end{align*}\]</span> Same equations, different unknowns — <em>identification is equilibrium read in reverse</em>. (With noisy or redundant measurements, read-in-reverse becomes least squares; that is where the data term of the next example comes from.) No differential equation was involved here: a chain of springs is a discrete structure, and identifying its stiffnesses is plain algebra. The differential equation returns with the next example.</p>
+<h3 id="sec:rung5">Example 5: the smallest inverse PINN</h3>
+<p>Continuum version, minimal: bar fixed at <span class="math inline">\(0\)</span>, tip force <span class="math inline">\(\bar F\)</span>, no distributed load, <em>unknown</em> stiffness <span class="math inline">\(\kappa = EA\)</span> (one number), and one measurement <span class="math inline">\(u^{\mathrm{meas}}\)</span> at a station <span class="math inline">\(x_d\)</span>. Ansatz <span class="math inline">\(\tilde u = w x\)</span> (hard BC; and since <span class="math inline">\(\tilde u&#39;&#39; = 0\)</span> the interior residual vanishes identically — simplification on purpose). The loss carries one physics term and one data term, and the unknown material parameter is trained <em>alongside</em> the displacement parameters: <span class="math display">\[J(w, \kappa)
+  = \underbrace{\bigl(\kappa w - \bar F\bigr)^2}_{\text{force BC (physics)}}
+  + \underbrace{\bigl(w x_d - u^{\mathrm{meas}}\bigr)^2}_{\text{data}} .\]</span> Hand solution: the data term pins the field, <span class="math inline">\(w = u^{\mathrm{meas}}/x_d\)</span>; the physics term then exposes the material, <span class="math inline">\(\kappa = \bar F x_d / u^{\mathrm{meas}}\)</span>. With <span class="math inline">\(\bar F = 2\)</span>, <span class="math inline">\(x_d = 1\)</span>, <span class="math inline">\(u^{\mathrm{meas}} = 0.5\)</span>: <span class="math inline">\(w = 0.5\)</span>, <span class="math inline">\(\kappa = 4\)</span> — checkable in one line against <span class="math inline">\(u = \bar F x/EA\)</span>. The division of labor is the whole message:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>In an inverse PINN, <em>data pins the field; physics then reveals the parameter</em>. Neither term alone suffices: data without physics fits a curve and learns nothing about <span class="math inline">\(EA\)</span>; physics without data has a one-parameter family of solutions (<span class="math inline">\(\kappa\)</span> and <span class="math inline">\(w\)</span> only constrained jointly). The loss is where measurement and law finally meet — the two residual notions of Lecture A in one functional.</p>
+</div>
+<h3 id="sec:rung6">Example 6: damage detection</h3>
+<p>Now the example that is <em>not</em> decorated homework. A bar has an unknown weakened zone (corrosion, a crack smeared into a notch): <span class="math display">\[EA(x;\, d, x_c) = EA_0 \Bigl(1 - d\, e^{-\left((x - x_c)/w_z\right)^2}\Bigr),\]</span> with damage depth <span class="math inline">\(d\)</span> and location <span class="math inline">\(x_c\)</span> unknown (zone width <span class="math inline">\(w_z\)</span> assumed). Known tip load <span class="math inline">\(\bar F\)</span>; displacements measured at a handful of stations (Fig. <a href="S1_worked_pinn_examples.html#fig:damage">S1.2</a>). Find the damage.</p>
+<figure id="fig:damage">
+<img src="figs/S1_fig2.svg" style="width:530px" alt="" />
+<figcaption><strong>Figure S1.2.</strong> Example 6: a bar with a hidden weakened zone. Known load, measured displacements at stations, unknown stiffness profile <span class="math inline">\(EA(x; d, x_c)\)</span>.</figcaption>
+</figure>
+<h5 id="formulation.">Formulation.</h5>
+<p>One preparatory insight, straight from Case B of Section <a href="02_boundary_value_problem.html#sec:exact">2.4</a>: with only a tip load, equilibrium integrates once by hand to <span class="math inline">\(N(x) = EA(x)\,u&#39;(x) = \bar F\)</span>. We may therefore use the <em>first-order residual</em> <span class="math display">\[R(x) = EA(x;\,d,x_c)\,\tilde u&#39;(x) - \bar F\]</span> instead of the second-order one — fewer derivatives of the network, a friendlier loss (the same gift, by the same move, that the weak form gave in Section <a href="02_boundary_value_problem.html#sec:weak">2.9</a>). The unknowns are trained jointly: network weights <span class="math inline">\(\mathbf{w}\)</span> for <span class="math inline">\(\tilde u(x) = x\cdot\mathrm{NN}(x;\mathbf{w})\)</span>, plus the two physical parameters <span class="math inline">\((d, x_c)\)</span>: <span class="math display">\[J(\mathbf{w}, d, x_c)
+  = \frac1m \sum_{i=1}^{m} R(x_i)^2
+  \;+\; \lambda_d \sum_{j} \bigl(\tilde u(x_j^{\mathrm{meas}}) - u_j^{\mathrm{meas}}\bigr)^2 .\]</span></p>
+<h5 id="does-it-work">Does it work?</h5>
+<p>Yes — and the prototype run (6 tanh units, 50 collocation points, 8 noiseless measurements, <span class="math inline">\(EA_0 = 1\)</span>, <span class="math inline">\(\bar F = 1\)</span>, <span class="math inline">\(w_z = 0.1\)</span>, <span class="math inline">\(\lambda_d = 2.5\)</span>, true values <span class="math inline">\(d = 0.5\)</span>, <span class="math inline">\(x_c = 0.6\)</span>, start values <span class="math inline">\(d = 0.1\)</span>, <span class="math inline">\(x_c = 0.4\)</span>, Adam optimizer of Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:gd">A.5</a>) is reproduced in Exercise B1, Part 6 (column 0 shows the state after the first step): <span class="math display">\[\begin{array}{c|ccccc}
+\text{step} &amp; 0 &amp; 600 &amp; 1200 &amp; 2400 &amp; 3000\\\hline
+J &amp; 0.082 &amp; 2.0\cdot10^{-3} &amp; 5.0\cdot10^{-4} &amp; 6.4\cdot10^{-5} &amp; 4.9\cdot10^{-5}\\
+d &amp; 0.08 &amp; 0.478 &amp; 0.492 &amp; 0.498 &amp; 0.499\\
+x_c &amp; 0.42 &amp; 0.597 &amp; 0.597 &amp; 0.599 &amp; 0.600
+\end{array}\]</span> The optimizer, told nothing but “here is the law, here are eight measured numbers,” locates the damage to three digits. This is the example where the method earns its complexity: there is no formula to look up, no linear system to partition — and yet the same loss anatomy as Example 1, traced once with a pencil, carries the whole thing.</p>
+<h2 id="sec:honest">S1.4   Two remarks</h2>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>The determinacy caveat.</strong> Every example above is checkable by hand <em>because</em> the 1D bar with end load is statically determinate: <span class="math inline">\(N(x)\)</span> follows from statics, so even Example 6 admits a shortcut (<span class="math inline">\(u&#39; = \bar F / EA(x)\)</span>, then fit <span class="math inline">\((d, x_c)\)</span> to the integrated profile — two-parameter curve fitting, no network needed). This is worth knowing for two reasons. First, it supplies an independent check of every result. Second, it marks precisely what the examples do <em>not</em> show: in 2D and 3D, with redundancy, the stress field depends on the unknown stiffness distribution, every shortcut dies, and the joint field-plus-parameter training is no longer a rehearsal but the actual method. The 1D examples teach the moves; the value of the moves lives one dimension up.</p>
+</div>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Thermal twin.</strong> Every example transposes to the rod of the exercise by the standard dictionary: identify conductivity <span class="math inline">\(\lambda(x)\)</span> (e.g. a degraded insulation zone) from a few thermocouple readings under a known heat input. Nothing in the method changes; Exercise B3 carries out a transposition of this kind for a cooling fin.</p>
+</div>
+<h2 id="s1.5-examples-exercise-parts-and-lecture-sections">S1.5   Examples, exercise parts and lecture sections</h2>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>example</strong></th>
+<th style="text-align: left;"><strong>Exercise B1</strong></th>
+<th style="text-align: left;"><strong>related lecture sections</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1 pencil PINN</td>
+<td style="text-align: left;">Part 1</td>
+<td style="text-align: left;">PINN loss: Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:pinn">B.1</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">2 tilted valley</td>
+<td style="text-align: left;">Part 2</td>
+<td style="text-align: left;">hard and soft BCs: Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:hardsoft">B.2</a>; gradient descent: Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:gd">A.5</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">3 one/many tanh units</td>
+<td style="text-align: left;">Part 3</td>
+<td style="text-align: left;">networks as ansätze: Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:nn">A.6</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">4 stepped-bar interrogation</td>
+<td style="text-align: left;">Part 4</td>
+<td style="text-align: left;">stepped bar: Section <a href="01_springs_and_stiffness.html#sec:bars">1.7</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">5 smallest inverse PINN</td>
+<td style="text-align: left;">Part 5</td>
+<td style="text-align: left;">scorecard, inverse problems: Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:scorecard">B.4</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">6 damage detection</td>
+<td style="text-align: left;">Part 6</td>
+<td style="text-align: left;">Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:scorecard">B.4</a>; continued in 2D in Section <a href="C_pinns_in_two_dimensions.html#sec:inverse2d">C.8</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The companion notebook <code>Exercise_B1_PINN.ipynb</code> implements all six examples with self-check cells and, completed, reproduces every number quoted in this supplement.</p>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="B_pinns_and_panns_in_one_dimension.html">← Lecture B</a> <a href="S2_worked_pann_examples.html">Supplement S2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

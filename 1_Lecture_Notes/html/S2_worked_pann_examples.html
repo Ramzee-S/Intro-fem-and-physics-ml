@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worked PANN Examples in One Dimension — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="S1_worked_pinn_examples.html">← Supplement S1</a> <a href="C_pinns_in_two_dimensions.html">Lecture C →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Supplement S2</p>
+<h1>Worked PANN Examples in One Dimension</h1>
+<p><em>Supplement to Lecture B (Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:pann">B.5</a>). Four worked examples of physics-augmented neural networks (PANNs) in one dimension, from Hooke’s law to a learned material inside a Newton solver. Every example is implemented in Exercise B2; all numbers were verified numerically.</em></p>
+<h2 id="s2.1-the-question-and-what-you-need">S2.1   The question, and what you need</h2>
+<p>Supplement S1 ended with an inverse problem: a bar with a damaged zone, whose depth and position were identified from measured displacements. But the <em>form</em> of the stiffness profile was assumed there, and only two numbers were found. What if the form of a material law is not known at all? That is the question a physics-augmented network answers: it learns the law itself from stress–strain data, and is built so that the result is a physically admissible material whatever the data.</p>
+<p>Three things from earlier are used: least-squares fitting (Lecture A); the difference between imposing a requirement <em>by construction</em> and <em>by persuasion</em> (Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:hardsoft">B.2</a>); and the picture of the material law as one replaceable arrow of the three-step diagram (Fig. <a href="02_boundary_value_problem.html#fig:tontichain">2.3</a>). Nothing from the differential-equation side of PINNs is needed. There are four examples: a material model with one parameter, solved in closed form; a small network whose physical properties you prove with a pencil; an honest comparison with an unconstrained network; and the learned material at work inside a solver.</p>
+<h2 id="s2.2-four-examples">S2.2   Four examples</h2>
+<h3 id="example-p1-hookes-law-is-the-smallest-pann">Example P1: Hooke’s law is the smallest PANN</h3>
+<p>Do not learn the stress; learn a stored energy and derive the stress from it. The smallest energy with any content is <span class="math display">\[\psi(\varepsilon) = \tfrac12\,\theta^2\,\varepsilon^2
+  \qquad\Longrightarrow\qquad
+  \sigma = \frac{\mathrm{d}\psi}{\mathrm{d}\varepsilon} = \theta^2\,\varepsilon,\]</span> with one trainable weight <span class="math inline">\(\theta\)</span>. Read off, for <em>every</em> <span class="math inline">\(\theta\)</span>: the stress derives from a potential; <span class="math inline">\(\psi\)</span> is convex, so the stiffness <span class="math inline">\(E = \theta^2\)</span> cannot be negative (that is why we train <span class="math inline">\(\theta\)</span> and not <span class="math inline">\(E\)</span>); and <span class="math inline">\(\sigma(0) = 0\)</span>. Three physical requirements, none of them in the loss. Fitting to stress–strain data is one-parameter least squares from Lecture A, in closed form: <span class="math inline">\(E = \sum \sigma_i\varepsilon_i / \sum\varepsilon_i^2\)</span>. With three tensile-test readings <span class="math inline">\((\varepsilon,\sigma) = (0.001, 205)\)</span>, <span class="math inline">\((0.002, 395)\)</span>, <span class="math inline">\((0.003, 610)\)</span> MPa: <span class="math display">\[E = \frac{0.205 + 0.790 + 1.830}{(1 + 4 + 9)\cdot 10^{-6}}\ \text{MPa}
+    = \frac{2.825}{14\cdot10^{-6}}\ \text{MPa} \approx 201.8\ \text{GPa}.\]</span> You have just trained a physics-augmented material model — and recognize it as the Young’s modulus from Lecture 1. That recognition is the point: PANNs do not replace the classical material law by something alien; they <em>generalize the classical recipe</em> — energy first, constraints in the form, data for the rest.</p>
+<h3 id="example-p2-a-one-layer-pann-and-its-built-in-properties">Example P2: a one-layer PANN and its built-in properties</h3>
+<p>Real materials are not linear. Replace the parabola by a small network that is convex <em>whatever its weights</em>: <span class="math display">\[\psi(\varepsilon) = \sum_{j=1}^{H} \alpha_j^2\, \ln\cosh(w_j\varepsilon+ b_j)
+  \;-\; \bigl[\psi(0) + \psi&#39;(0)\,\varepsilon\bigr]_{\text{correction}} ,\]</span> whose stress is <span id="eq:pann"></span><span class="math display">\[\hat\sigma(\varepsilon) = \sum_{j=1}^{H} \alpha_j^2\, w_j
+     \bigl[\tanh(w_j\varepsilon+ b_j) - \tanh(b_j)\bigr].
+  
+\tag{S2.1}\]</span> Three pencil checks, each one line, each valid for <em>all</em> weights:</p>
+<ul>
+<li><p><strong>Stress-free reference</strong>: set <span class="math inline">\(\varepsilon= 0\)</span> in <a href="S2_worked_pann_examples.html#eq:pann">(S2.1)</a> — every bracket vanishes. <span class="math inline">\(\hat\sigma(0) = 0\)</span>, exactly.</p></li>
+<li><p><strong>Stability</strong>: differentiate, <span class="math inline">\(\hat\sigma&#39;(\varepsilon) = \sum_j \alpha_j^2 w_j^2\,
+      \mathrm{sech}^2(w_j\varepsilon+b_j) \ge 0\)</span> — squares times squares times a positive function. The tangent stiffness can never turn negative (it can, however, decay towards zero where the <span class="math inline">\(\tanh\)</span> saturates; the stress stays bounded).</p></li>
+<li><p><strong>Energy consistency</strong>: <span class="math inline">\(\hat\sigma\)</span> is the derivative of <span class="math inline">\(\psi\)</span> by definition. (In 1D every continuous law has a potential; the discipline pays off from 2D on, where it does not come free.)</p></li>
+</ul>
+<p>This is the point of the example: “the network satisfies the physics for any weights” stops being a slogan and becomes three lines of calculus that you have done yourself. The architecture behind <a href="S2_worked_pann_examples.html#eq:pann">(S2.1)</a> — nonnegative output weights on a convex activation — is the one-layer case of the <em>input-convex networks</em> used in the research literature.</p>
+<h3 id="example-p3-constrained-versus-unconstrained-networks">Example P3: constrained versus unconstrained networks</h3>
+<p>Now the experiment. Ten noisy tensile readings, strains <span class="math inline">\(0.05 \le \varepsilon\le 0.5\)</span> (no compression data, nothing at the origin), from a saturating material <span class="math inline">\(\sigma = \tanh(3\varepsilon)\)</span>. Two models with four hidden units each are fitted by the same optimizer to the same data: an <em>unconstrained</em> network <span class="math inline">\(\sigma_{\mathrm{NN}}(\varepsilon) =
+\sum_j c_j\tanh(w_j\varepsilon+b_j) + c_0\)</span>, and the PANN <a href="S2_worked_pann_examples.html#eq:pann">(S2.1)</a> (Fig. <a href="S2_worked_pann_examples.html#fig:pannfit">S2.1</a>).</p>
+<figure id="fig:pannfit">
+<img src="figs/S2_fig1.svg" style="width:514px" alt="" />
+<figcaption><strong>Figure S2.1.</strong> Example P3. Both models fit the ten data points equally well. Beyond the last data point the unconstrained network’s stress <em>falls</em> — a material with negative stiffness, which a load-controlled Newton solver cannot follow — and at the origin it predicts a stress with no strain. The PANN cannot do either, whatever the data.</figcaption>
+</figure>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: center;"><strong>unconstrained network</strong></th>
+<th style="text-align: center;"><strong>PANN <a href="S2_worked_pann_examples.html#eq:pann">(S2.1)</a></strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">fit to data (mean squared misfit)</td>
+<td style="text-align: center;"><span class="math inline">\(0.9\cdot10^{-4}\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(1.7\cdot10^{-4}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">stress at zero strain <span class="math inline">\(\sigma(0)\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(+0.016\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0\)</span> (exact)</td>
+</tr>
+<tr>
+<td style="text-align: left;">smallest tangent stiffness on <span class="math inline">\([-0.5,\,1]\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(-0.73\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(+0.03\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">error at <span class="math inline">\(\varepsilon= 1.0\)</span> (extrapolation)</td>
+<td style="text-align: center;"><span class="math inline">\(0.35\)</span></td>
+<td style="text-align: center;"><span class="math inline">\(0.02\)</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Inside the data the two are indistinguishable — the unconstrained network even fits slightly <em>better</em>, as expected: the PANN family is a subset of the unconstrained one. The difference is everything the data did not say. The unconstrained model carries a residual stress at rest and, just past the last measurement, its stiffness turns negative: handed to a load-controlled finite element solver, that model fails at the first load step that strays outside the tested range.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>What “by construction” does not buy.</strong> Repeating the experiment with other noise realizations, the PANN <em>always</em> satisfies its three guarantees, but it does not always extrapolate <em>accurately</em>: in three of four runs its error in the untested compression range was as large as the unconstrained model’s, or larger. Constraints guarantee an <em>admissible</em> material, not the <em>right</em> one. Lecture B’s dictionary said it in four words: “constraints exact; fit empirical.”</p>
+</div>
+<h5 id="one-more-constraint-one-less-thing-to-learn.">One more constraint, one less thing to learn.</h5>
+<p>The material is symmetric in tension and compression: <span class="math inline">\(\sigma(-\varepsilon) = -\sigma(\varepsilon)\)</span>. Build that in — set <span class="math inline">\(b_j = 0\)</span> in <a href="S2_worked_pann_examples.html#eq:pann">(S2.1)</a>, leaving <span class="math inline">\(\hat\sigma = \sum_j\alpha_j^2 w_j\tanh(w_j\varepsilon)\)</span> — and the compression branch, for which there is not a single data point, comes out right for free: the error at <span class="math inline">\(\varepsilon= -0.3\)</span> is below <span class="math inline">\(0.02\)</span> in all four runs. This is the slogan of Lecture B with a number attached: <em>every requirement moved into the architecture is one the data need not teach and the optimizer cannot violate.</em></p>
+<h3 id="example-p4-the-learned-law-inside-a-newton-solver">Example P4: the learned law inside a Newton solver</h3>
+<p>Finally, keep the diagram’s promise: replace one arrow, keep the rest. A bar (<span class="math inline">\(A = L = 1\)</span>, fixed at one end) of the learned material is pulled by <span class="math inline">\(F = 0.6\)</span>. Equilibrium is what it always was, internal force equals load, only now the internal force comes from the network: <span class="math display">\[r(u) = A\,\hat\sigma\!\left(\tfrac{u}{L}\right) - F = 0 .\]</span> This is Lecture 1’s <span class="math inline">\(ku = f\)</span> with a stiffness that depends on <span class="math inline">\(u\)</span> — one equation, no longer linear, solved by Newton’s method: linearize, solve the <em>linear</em> spring problem with the <em>tangent stiffness</em> <span class="math inline">\(k_t = A\,\hat\sigma&#39;(u/L)/L\)</span>, repeat. Geometrically: replace the curve <span class="math inline">\(r(u)\)</span> by its tangent line at the current <span class="math inline">\(u\)</span>, take the zero of that line as the next <span class="math inline">\(u\)</span>, and repeat (Lecture 6, Section <a href="06_nonlinear_problems.html#sec:newton">6.3</a>, treats the method in full). With the idealized law <span class="math inline">\(\hat\sigma = \tanh 3\varepsilon\)</span> (the truth behind the data): <span class="math display">\[\begin{array}{c|ccccc}
+\text{iteration} &amp; 0 &amp; 1 &amp; 2 &amp; 3 &amp; \text{exact}\\\hline
+u &amp; 0 &amp; 0.2000 &amp; 0.2295 &amp; 0.2310 &amp; 0.23105\\
+r(u) &amp; -0.6000 &amp; -0.0630 &amp; -0.0030 &amp; -8\cdot10^{-6} &amp; 0\\
+k_t &amp; 3.000 &amp; 2.135 &amp; 1.931 &amp; 1.920 &amp;
+\end{array}\]</span> (With the network actually trained in Example P3 the same loop converges to <span class="math inline">\(u = 0.2272\)</span> — the <span class="math inline">\(1.7\,\%\)</span> difference is the <em>fit</em> error of the material, faithfully passed on by a solver that did its own job exactly.) Each column is a Lecture 1 spring calculation with a different <span class="math inline">\(k\)</span>; the network is consulted twice per iteration — once for the stress, once for the tangent — and never sees the solver. And here the stability guarantee of Example P2 turns from a nicety into a necessity: Newton divides by <span class="math inline">\(k_t\)</span>. A material model whose tangent can change sign can send Newton the wrong way; the PANN’s cannot. Its tangent can still become very small where the law saturates, and no load above the bounded stress <span class="math inline">\(\sup\hat\sigma\)</span> has a solution at all; strict positivity needs one more building block, e.g. an added term <span class="math inline">\(\tfrac12\beta^2\varepsilon^2\)</span> in <span class="math inline">\(\psi\)</span>, which gives <span class="math inline">\(\hat\sigma&#39; \ge \beta^2 &gt; 0\)</span>. The same pattern scales unchanged to the finite element level: the element internal force is <span class="math inline">\(\int \mathbf{B}^{\mathsf{T}}\hat\sigma\,\mathrm{d}V\)</span> and the tangent stiffness <span class="math inline">\(\int \mathbf{B}^{\mathsf{T}}\hat\sigma&#39;\,\mathbf{B}\,\mathrm{d}V\)</span> — the <span class="math inline">\(\int\mathbf{B}^{\mathsf{T}}\mathbf{D}\,\mathbf{B}\)</span> of the notes, with <span class="math inline">\(\mathbf{D}\)</span> asked from the network at every integration point.</p>
+<h2 id="s2.3-pinn-and-pann-on-the-same-question">S2.3   PINN and PANN on the same question</h2>
+<p>It is worth closing the loop with Supplement S1 explicitly, because the two methods are easily mistaken for competitors:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"></th>
+<th style="text-align: left;"><strong>inverse PINN (S1, Example 6)</strong></th>
+<th style="text-align: left;"><strong>PANN (this supplement)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">what is unknown</td>
+<td style="text-align: left;">a few parameters of an <em>assumed</em> stiffness profile</td>
+<td style="text-align: left;">the <em>form</em> of the material law itself</td>
+</tr>
+<tr>
+<td style="text-align: left;">data</td>
+<td style="text-align: left;">displacements of the structure</td>
+<td style="text-align: left;">stress–strain pairs of the material</td>
+</tr>
+<tr>
+<td style="text-align: left;">the network represents</td>
+<td style="text-align: left;">the solution field <span class="math inline">\(u(x)\)</span></td>
+<td style="text-align: left;">the energy <span class="math inline">\(\psi(\varepsilon)\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">physics enters</td>
+<td style="text-align: left;">in the loss (residual)</td>
+<td style="text-align: left;">in the architecture</td>
+</tr>
+<tr>
+<td style="text-align: left;">after training</td>
+<td style="text-align: left;">you have an answer to one problem</td>
+<td style="text-align: left;">you have a material for every problem</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>They are not rivals but two halves: one learns <em>about a structure</em>, the other <em>about a material</em>. The natural research-level combination — a constrained material network trained <em>through</em> the equilibrium equations from displacement data alone — is exactly the two sets of examples combined, and a fitting last sentence for the lecture.</p>
+<h2 id="s2.4-examples-exercise-parts-and-lecture-sections">S2.4   Examples, exercise parts and lecture sections</h2>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>example</strong></th>
+<th style="text-align: left;"><strong>Exercise B2</strong></th>
+<th style="text-align: left;"><strong>related lecture sections</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">P1 Hooke as PANN</td>
+<td style="text-align: left;">Part 1</td>
+<td style="text-align: left;">PANNs: Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:pann">B.5</a>; least squares: Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:regression">A.2</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">P2 one-layer PANN</td>
+<td style="text-align: left;">Part 2</td>
+<td style="text-align: left;">construction vs. persuasion: Section <a href="B_pinns_and_panns_in_one_dimension.html#sec:hardsoft">B.2</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">P3 constrained vs. unconstrained</td>
+<td style="text-align: left;">Parts 3 and 3b</td>
+<td style="text-align: left;">residual vs. error: Section <a href="A_from_curve_fitting_to_neural_networks.html#sec:resvserr">A.3</a></td>
+</tr>
+<tr>
+<td style="text-align: left;">P4 learned law in a solver</td>
+<td style="text-align: left;">Part 4</td>
+<td style="text-align: left;">energy: Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a>; element integrals: <a href="02_boundary_value_problem.html#eq:kpattern">(2.16)</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The companion notebook <code>Exercise_B2_PANN.ipynb</code> implements all four examples with self-check cells and, completed, reproduces the numbers of this supplement (the trained material of Part 4 gives <span class="math inline">\(u = 0.2272\)</span>, as discussed under Example P4).</p>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="S1_worked_pinn_examples.html">← Supplement S1</a> <a href="C_pinns_in_two_dimensions.html">Lecture C →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

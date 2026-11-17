@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Springs, Nodes, and the Stiffness Method — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="00_how_to_read.html">← How to Read These Notes</a> <a href="02_boundary_value_problem.html">Lecture 2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture 1</p>
+<h1>Springs, Nodes, and the Stiffness Method</h1>
+<h2 id="one-spring">1.1   One spring</h2>
+<p>The simplest mechanical model in existence: a linear spring of stiffness <span class="math inline">\(k\)</span>, fixed to a wall at one end, pulled by a force <span class="math inline">\(f\)</span> at the other (Fig. <a href="01_springs_and_stiffness.html#fig:onespring">1.1</a>). The free end moves by a displacement <span class="math inline">\(u\)</span>, and for a linear spring the two are proportional: <span id="eq:fku"></span><span class="math display">\[f = k\,u .
+  
+\tag{1.1}\]</span> That is the whole model. The stiffness <span class="math inline">\(k\)</span> (units N/m) says how much force is needed per unit of displacement. Given any two of <span class="math inline">\((f,u,k)\)</span> you can find the third. Everything that follows in this course — including a million-degree-of-freedom crash simulation — is equation <a href="01_springs_and_stiffness.html#eq:fku">(1.1)</a> repeated many times and organized well.</p>
+<figure id="fig:onespring">
+<img src="figs/01_fig1.svg" style="width:207px" alt="" />
+<figcaption><strong>Figure 1.1.</strong> One spring: force <span class="math inline">\(f\)</span>, displacement <span class="math inline">\(u\)</span>, stiffness <span class="math inline">\(k\)</span>.</figcaption>
+</figure>
+<h2 id="a-spring-as-an-element-two-nodes">1.2   A spring as an <em>element</em>: two nodes</h2>
+<p>Now cut the spring free from the wall. A free spring connects two points — we call them <em>nodes</em> and number them 1 and 2. Each node has a displacement (<span class="math inline">\(u_1\)</span>, <span class="math inline">\(u_2\)</span>) and a force applied to it (<span class="math inline">\(f_1\)</span>, <span class="math inline">\(f_2\)</span>), all positive to the right (Fig. <a href="01_springs_and_stiffness.html#fig:springelem">1.2</a>).</p>
+<figure id="fig:springelem">
+<img src="figs/01_fig2.svg" style="width:235px" alt="" />
+<figcaption><strong>Figure 1.2.</strong> The free spring <em>element</em>: two nodes, two displacements, two nodal forces. All arrows show the <em>positive sign convention</em> (<span class="math inline">\(+x\)</span>), shared by all four quantities; negative values mean the physical direction is reversed.</figcaption>
+</figure>
+<p>What matters to the spring is not where its ends are but how much it is <em>stretched</em>: the elongation <span class="math inline">\(\Delta = u_2 - u_1\)</span>. The spring then carries an internal force <span class="math inline">\(N = k\,\Delta\)</span> (positive in tension). For the spring to be in equilibrium, the nodal forces must be <span class="math inline">\(f_2 = N\)</span> and <span class="math inline">\(f_1 = -N\)</span>. Writing this out, <span class="math display">\[f_1 = k(u_1 - u_2), \qquad f_2 = k(u_2 - u_1),\]</span> or, in matrix form, <span id="eq:kelem"></span><span class="math display">\[\underbrace{\begin{bmatrix} k &amp; -k\\ -k &amp; k \end{bmatrix}}_{\textstyle \mathbf{k}^e}
+  \begin{bmatrix} u_1\\ u_2 \end{bmatrix}
+  =
+  \begin{bmatrix} f_1\\ f_2 \end{bmatrix}.
+  
+\tag{1.2}\]</span> A word about the arrows in Fig. <a href="01_springs_and_stiffness.html#fig:springelem">1.2</a>, because they trip up almost everyone once. They show the <em>positive directions</em> — a sign convention — not the directions the forces “really” act. Displacements and forces must share one convention (here: <span class="math inline">\(+x\)</span> for all four quantities), otherwise the matrix equation <a href="01_springs_and_stiffness.html#eq:kelem">(1.2)</a> cannot hold as written. The physics then lives in the signs: stretch the spring (<span class="math inline">\(u_2&gt;u_1\)</span>, so <span class="math inline">\(N&gt;0\)</span>) and <a href="01_springs_and_stiffness.html#eq:kelem">(1.2)</a> returns <span class="math inline">\(f_1 = -N &lt; 0\)</span> — the force on node 1 physically points left, exactly as your intuition expects for holding a stretched spring. You may have seen free-body sketches with the two end arrows drawn <em>opposing</em> each other; those depict the internal force <span class="math inline">\(N\)</span> in a particular state (tension), which is a different — equally correct — picture. For nodal quantities we always draw the convention, never one particular state: the convention is also what makes conjugate pairs work, since the product <span class="math inline">\(f_i u_i\)</span> is only a meaningful work when both are measured along the same positive direction.</p>
+<p>The matrix <span class="math inline">\(\mathbf{k}^e\)</span> is the <em>element stiffness matrix</em>. Two observations, both of which will follow us for the rest of the course:</p>
+<ol>
+<li><p><span class="math inline">\(\mathbf{k}^e\)</span> is <em>symmetric</em>. (Why this is no accident we will see in Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a>.)</p></li>
+<li><p><span class="math inline">\(\mathbf{k}^e\)</span> is <em>singular</em>: its determinant is <span class="math inline">\(k^2-k^2=0\)</span>, and indeed <span class="math inline">\(\mathbf{k}^e\begin{bmatrix}1\\1\end{bmatrix}=\mathbf{0}\)</span>. Physically: if both nodes move by the same amount, the spring is not stretched and produces no force. The element cannot tell you <em>where</em> it is, only how much it is <em>deformed</em>. This is called a <em>rigid body mode</em>, and it is the deep reason why boundary conditions will be unavoidable in Section <a href="01_springs_and_stiffness.html#sec:bc">1.5</a>.</p></li>
+</ol>
+<h2 id="sec:twosprings">1.3   Two springs, three nodes: assembly</h2>
+<p>Connect two springs in a chain: spring <span class="math inline">\(k_1\)</span> between nodes 1 and 2, spring <span class="math inline">\(k_2\)</span> between nodes 2 and 3 (Fig. <a href="01_springs_and_stiffness.html#fig:chain">1.3</a>). External forces <span class="math inline">\(f_1,f_2,f_3\)</span> may act on the nodes.</p>
+<figure id="fig:chain">
+<img src="figs/01_fig3.svg" style="width:350px" alt="" />
+<figcaption><strong>Figure 1.3.</strong> Two spring elements sharing node 2.</figcaption>
+</figure>
+<p>Each spring obeys its own equation <a href="01_springs_and_stiffness.html#eq:kelem">(1.2)</a>. The only new physics is at the shared node 2: the external force <span class="math inline">\(f_2\)</span> must balance the pull of <em>both</em> springs. Node by node: <span class="math display">\[\begin{aligned}
+  \text{node 1:}\quad &amp; k_1(u_1-u_2) = f_1,\\
+  \text{node 2:}\quad &amp; k_1(u_2-u_1) + k_2(u_2-u_3) = f_2,\\
+  \text{node 3:}\quad &amp; k_2(u_3-u_2) = f_3 .
+\end{aligned}\]</span> In matrix form, <span id="eq:global3"></span><span class="math display">\[\underbrace{\begin{bmatrix}
+    k_1 &amp; -k_1 &amp; 0\\
+    -k_1 &amp; k_1+k_2 &amp; -k_2\\
+    0 &amp; -k_2 &amp; k_2
+  \end{bmatrix}}_{\textstyle \mathbf{K}}
+  \begin{bmatrix} u_1\\u_2\\u_3 \end{bmatrix}
+  =
+  \begin{bmatrix} f_1\\f_2\\f_3 \end{bmatrix},
+  \qquad\text{short:}\quad \mathbf{K}\,\mathbf{u}=\mathbf{f}.
+  
+\tag{1.3}\]</span> Now look closely at <span class="math inline">\(\mathbf{K}\)</span>. It is exactly the two element matrices <em>added into the right places</em> of a <span class="math inline">\(3\times3\)</span> grid: <span class="math display">\[\mathbf{K} =
+\begin{bmatrix}
+  \textcolor{blue!60!black}{k_1} &amp; \textcolor{blue!60!black}{-k_1} &amp; 0\\
+  \textcolor{blue!60!black}{-k_1} &amp; \textcolor{blue!60!black}{k_1}+\textcolor{red!65!black}{k_2} &amp; \textcolor{red!65!black}{-k_2}\\
+  0 &amp; \textcolor{red!65!black}{-k_2} &amp; \textcolor{red!65!black}{k_2}
+\end{bmatrix}
+\qquad
+\begin{array}{l}
+\textcolor{blue!60!black}{\text{element 1 occupies rows/columns }(1,2)}\\[1mm]
+\textcolor{red!65!black}{\text{element 2 occupies rows/columns }(2,3)}
+\end{array}\]</span> This operation — add each element’s small matrix into the global matrix according to which nodes the element connects — is called <em>assembly</em>. Nothing about it is specific to two springs.</p>
+<h2 id="assembly-in-general">1.4   Assembly in general</h2>
+<p>For a chain of <span class="math inline">\(m\)</span> springs and <span class="math inline">\(n=m+1\)</span> nodes the procedure is mechanical:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Assembly.</strong> Start with an <span class="math inline">\(n\times n\)</span> matrix of zeros. For each element <span class="math inline">\(e\)</span> connecting nodes <span class="math inline">\((i,j)\)</span> with stiffness <span class="math inline">\(k_e\)</span>, add <span class="math display">\[+k_e \text{ to } K_{ii} \text{ and } K_{jj},\qquad
+  -k_e \text{ to } K_{ij} \text{ and } K_{ji}.\]</span> The result <span class="math inline">\(\mathbf{K}\)</span> is the <em>global stiffness matrix</em>; the equations of all nodes together read <span class="math inline">\(\mathbf{K}\mathbf{u}=\mathbf{f}\)</span>.</p>
+</div>
+<p>Three properties come for free, and you should verify each on equation <a href="01_springs_and_stiffness.html#eq:global3">(1.3)</a>:</p>
+<ul>
+<li><p><strong>Symmetry</strong>: <span class="math inline">\(K_{ij}=K_{ji}\)</span>, inherited from the elements.</p></li>
+<li><p><strong>Sparsity</strong>: <span class="math inline">\(K_{ij}=0\)</span> whenever nodes <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> share no element. In the chain, node 1 does not touch node 3, so <span class="math inline">\(K_{13}=0\)</span>. For <span class="math inline">\(1000\)</span> nodes in a chain, <span class="math inline">\(\mathbf{K}\)</span> has <span class="math inline">\(10^6\)</span> entries of which only about <span class="math inline">\(3000\)</span> are nonzero. Real FEM programs never store the zeros.</p></li>
+<li><p><strong>Singularity</strong>: every row sums to zero, so <span class="math inline">\(\mathbf{K}\,[1,1,\dots,1]^{\mathsf{T}}=\mathbf{0}\)</span>. Shifting the whole chain rigidly produces no forces. <span class="math inline">\(\mathbf{K}\)</span> alone can <em>never</em> be inverted.</p></li>
+</ul>
+<p>The third point is not a defect of our bookkeeping; it is physics. A structure floating freely in space does not have a well-defined position, so the equations cannot possibly determine <span class="math inline">\(\mathbf{u}\)</span> uniquely. Something must hold the structure. That something is the subject of the next — and most important — section.</p>
+<h2 id="sec:bc">1.5   Boundary conditions and conjugate quantities</h2>
+<p>At each node <span class="math inline">\(i\)</span> live two quantities: the displacement <span class="math inline">\(u_i\)</span> and the force <span class="math inline">\(f_i\)</span>. They are called <em>conjugate</em>: their product <span class="math inline">\(f_i\,u_i\)</span> is a work (we return to this in Section <a href="01_springs_and_stiffness.html#sec:energy">1.6</a>). The central rule of the whole subject is:</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>One of each pair.</strong> At every node (more generally: every degree of freedom), exactly <em>one</em> of the pair <span class="math inline">\((u_i, f_i)\)</span> must be prescribed, and the other is then <em>computed</em>:</p>
+<ul>
+<li><p>prescribe <span class="math inline">\(u_i\)</span> (a <em>support</em>, possibly moving): the force <span class="math inline">\(f_i\)</span> becomes an unknown <em>reaction</em> supplied by the support;</p></li>
+<li><p>prescribe <span class="math inline">\(f_i\)</span> (a load — and a <em>free node</em> is simply the load <span class="math inline">\(f_i=0\)</span>): the displacement <span class="math inline">\(u_i\)</span> is unknown.</p></li>
+</ul>
+<p>Prescribing both would in general contradict the physics; prescribing neither leaves the problem underdetermined. And at least one displacement must be prescribed somewhere, otherwise the rigid body mode survives and <span class="math inline">\(\mathbf{K}\)</span> cannot be inverted.</p>
+</div>
+<p>Note the easily missed point: <em>a node with “nothing” attached is not a node with no boundary condition</em> — it is a node with the known force <span class="math inline">\(f_i=0\)</span>. Every degree of freedom always carries exactly one known and one unknown.</p>
+<h3 class="unnumbered" id="worked-example-a-fix-one-end-pull-the-other">Worked example A: fix one end, pull the other</h3>
+<p>Take the chain of Fig. <a href="01_springs_and_stiffness.html#fig:chain">1.3</a> with <span class="math inline">\(k_1=k_2=k\)</span>, prescribe <span class="math display">\[u_1 = 0 \quad(\text{support}), \qquad f_2 = 0,\qquad f_3 = F .\]</span> Unknowns: <span class="math inline">\(u_2,\,u_3\)</span> and the reaction <span class="math inline">\(f_1\)</span>. Because <span class="math inline">\(u_1\)</span> is known, we take rows 2 and 3 of <a href="01_springs_and_stiffness.html#eq:global3">(1.3)</a> and move the known <span class="math inline">\(u_1\)</span> to the right-hand side (here it is zero anyway): <span class="math display">\[\begin{bmatrix} 2k &amp; -k\\ -k &amp; k \end{bmatrix}
+  \begin{bmatrix} u_2 \\ u_3 \end{bmatrix}
+  =
+  \begin{bmatrix} 0\\ F \end{bmatrix}
+  \quad\Longrightarrow\quad
+  u_2 = \frac{F}{k},\qquad u_3 = \frac{2F}{k}.\]</span> The reduced <span class="math inline">\(2\times2\)</span> matrix is <em>not</em> singular — fixing <span class="math inline">\(u_1\)</span> removed the rigid body mode. Finally, the first row of <a href="01_springs_and_stiffness.html#eq:global3">(1.3)</a>, which we set aside, now <em>pays us back</em>: it yields the reaction <span class="math display">\[f_1 = k\,u_1 - k\,u_2 = -F .\]</span> As it must: the wall pulls back with exactly the applied load. Checking reactions against overall equilibrium is the cheapest sanity check in FEM — use it always.</p>
+<h3 class="unnumbered" id="worked-example-b-prescribed-displacements-computed-forces">Worked example B: prescribed displacements, computed forces</h3>
+<p>Same chain, but now <em>no</em> force is applied; instead we grab node 3 and drag it: <span class="math display">\[u_1 = 0,\qquad f_2 = 0,\qquad u_3 = \delta \ (\text{prescribed}).\]</span> Now only <span class="math inline">\(u_2\)</span> is unknown. Row 2 of <a href="01_springs_and_stiffness.html#eq:global3">(1.3)</a>: <span class="math display">\[-k\,u_1 + 2k\,u_2 - k\,u_3 = 0
+  \quad\Longrightarrow\quad
+  u_2 = \tfrac{\delta}{2},\]</span> and rows 1 and 3 give the reactions <span class="math display">\[f_1 = -k\,u_2 = -\tfrac{k\delta}{2},
+  \qquad
+  f_3 = -k\,u_2 + k\,\delta = +\tfrac{k\delta}{2}.\]</span> Equal and opposite — the two supports pull the chain apart (tension <span class="math inline">\(N = k\delta/2\)</span>). Notice the perfect symmetry with example A: there we knew forces and computed displacements; here we know displacements and compute forces. The machinery does not care which way around; it only insists on <em>one known per node</em>.</p>
+<h3 class="unnumbered" id="the-general-recipe-partitioning">The general recipe: partitioning</h3>
+<p>Sort the degrees of freedom into <em>f</em>ree ones (force known, displacement unknown) and <em>p</em>rescribed ones (displacement known, force unknown), and partition the global system accordingly: <span id="eq:partition"></span><span class="math display">\[\begin{bmatrix}
+    \mathbf{K}_{ff} &amp; \mathbf{K}_{fp}\\
+    \mathbf{K}_{pf} &amp; \mathbf{K}_{pp}
+  \end{bmatrix}
+  \begin{bmatrix} \mathbf{u}_f\\ \mathbf{u}_p \end{bmatrix}
+  =
+  \begin{bmatrix} \mathbf{f}_f\\ \mathbf{f}_p \end{bmatrix},
+  \qquad
+  \text{$\mathbf{u}_p$, $\mathbf{f}_f$ known;\quad $\mathbf{u}_f$, $\mathbf{f}_p$ unknown.}
+  
+\tag{1.4}\]</span> The top block is solved first, the bottom block is then evaluated: <span id="eq:solve"></span><span class="math display">\[\boxed{\;
+  \mathbf{K}_{ff}\,\mathbf{u}_f = \mathbf{f}_f - \mathbf{K}_{fp}\,\mathbf{u}_p ,
+  \qquad
+  \mathbf{f}_p = \mathbf{K}_{pf}\,\mathbf{u}_f + \mathbf{K}_{pp}\,\mathbf{u}_p .\;}
+  
+\tag{1.5}\]</span> Redo examples A and B with <a href="01_springs_and_stiffness.html#eq:solve">(1.5)</a> and watch both fall out of the same two lines. The term <span class="math inline">\(-\mathbf{K}_{fp}\mathbf{u}_p\)</span> is how a <em>nonzero</em> prescribed displacement enters the load side: dragging a support acts exactly like a set of equivalent forces.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Load cases.</strong> <span class="math inline">\(\mathbf{K}_{ff}\)</span> depends only on the structure and on <em>which</em> DOFs are fixed — not on the load values. Different load combinations (self-weight, wind, a dragged support, …) are just different right-hand sides in <a href="01_springs_and_stiffness.html#eq:solve">(1.5)</a>. A program factorizes <span class="math inline">\(\mathbf{K}_{ff}\)</span> once and back-substitutes once per load case — this is why adding the 37th load case to a large model is almost free.</p>
+</div>
+<h2 id="sec:energy">1.6   Energy: a second road to the same equations</h2>
+<p>There is another way to find the equilibrium equations, so different in spirit that it deserves its own section — and it will reappear in Lecture 2 as the deeper meaning of Galerkin’s method.</p>
+<p>A spring stretched by <span class="math inline">\(\Delta\)</span> stores the elastic energy <span class="math inline">\(\tfrac12 k \Delta^2\)</span> (the area under the force–elongation line). A constant force <span class="math inline">\(f\)</span> acting through a displacement <span class="math inline">\(u\)</span> does the work <span class="math inline">\(f\,u\)</span>; the <em>potential</em> of the load is <span class="math inline">\(-f\,u\)</span>. Define the <em>total potential energy</em> of the loaded structure as stored energy minus work done by loads. For the single wall-mounted spring of Fig. <a href="01_springs_and_stiffness.html#fig:onespring">1.1</a>: <span class="math display">\[\Pi(u) = \tfrac12 k u^2 - f u .\]</span> Nature chooses the displacement that <em>minimizes</em> <span class="math inline">\(\Pi\)</span> (Fig. <a href="01_springs_and_stiffness.html#fig:energy">1.4</a>). Setting the derivative to zero: <span class="math display">\[\frac{\mathrm{d}\Pi}{\mathrm{d}u} = k u - f = 0
+  \quad\Longleftrightarrow\quad
+  k u = f .\]</span> The equilibrium equation <em>is</em> the minimum condition of an energy. For the general assembled system the same computation reads <span id="eq:Pi"></span><span class="math display">\[\Pi(\mathbf{u}) \;=\; \underbrace{\tfrac12\,\mathbf{u}^{\mathsf{T}}\mathbf{K}\,\mathbf{u}}_{\text{stored}}
+  \;-\; \underbrace{\mathbf{u}^{\mathsf{T}}\mathbf{f}}_{\text{work of loads}},
+  \qquad
+  \frac{\partial \Pi}{\partial \mathbf{u}} = \mathbf{K}\mathbf{u} - \mathbf{f} = \mathbf{0}.
+  
+\tag{1.6}\]</span> (If matrix calculus is new to you: write out <span class="math inline">\(\Pi\)</span> for the two-spring chain and take <span class="math inline">\(\partial\Pi/\partial u_2\)</span> by hand; you will recover exactly the node-2 equation of <a href="01_springs_and_stiffness.html#eq:global3">(1.3)</a>.)</p>
+<figure id="fig:energy">
+<img src="figs/01_fig4.svg" style="width:266px" alt="" />
+<figcaption><strong>Figure 1.4.</strong> Total potential energy of one spring under a constant load. The equilibrium displacement is the one that minimizes <span class="math inline">\(\Pi\)</span>.</figcaption>
+</figure>
+<p>Why bother with a second derivation of equations we already had? Three reasons:</p>
+<ul>
+<li><p>It explains the <em>symmetry</em> of <span class="math inline">\(\mathbf{K}\)</span>: a symmetric matrix is exactly what second derivatives of a scalar function produce (<span class="math inline">\(K_{ij} = \partial^2\Pi/\partial u_i\,\partial u_j\)</span>).</p></li>
+<li><p>It explains <em>conjugate</em>: force and displacement are partners in the work term <span class="math inline">\(\mathbf{u}^{\mathsf{T}}\mathbf{f}\)</span>. Pairs whose product is energy are precisely the pairs of which you may prescribe one member each.</p></li>
+<li><p>In Lecture 2, when displacement becomes a <em>function</em> <span class="math inline">\(u(x)\)</span> rather than a list of numbers, “take the derivative and set it to zero” will mature into the <em>weak form</em> — the heart of FEM. The idea, however, will be exactly the parabola of Fig. <a href="01_springs_and_stiffness.html#fig:energy">1.4</a>.</p></li>
+</ul>
+<h2 id="sec:bars">1.7   From springs to bars: enter <span class="math inline">\(E\)</span>, <span class="math inline">\(A\)</span>, <span class="math inline">\(L\)</span></h2>
+<p>So far, stiffness <span class="math inline">\(k\)</span> was handed to us. Now let the “spring” be a real structural member: a straight <em>bar</em> (truss member) of length <span class="math inline">\(L\)</span>, cross-section area <span class="math inline">\(A\)</span>, made of a material with Young’s modulus <span class="math inline">\(E\)</span>. Pull it with an axial force <span class="math inline">\(N\)</span>: <span class="math display">\[\text{stress } \sigma = \frac{N}{A}, \qquad
+  \text{strain } \varepsilon= \frac{\sigma}{E}, \qquad
+  \text{elongation } \Delta L = \varepsilon\,L = \frac{N L}{E A}.\]</span> Read backwards: <span id="eq:EAL"></span><span class="math display">\[N = \underbrace{\frac{EA}{L}}_{\textstyle k}\,\Delta L .
+  
+\tag{1.7}\]</span></p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p>A uniform elastic bar <em>is</em> a linear spring with <span class="math inline">\(\;k = EA/L\)</span>. Everything in this lecture — element matrix, assembly, boundary conditions, energy — applies verbatim.</p>
+</div>
+<figure id="fig:stepped">
+<img src="figs/01_fig5.svg" style="width:385px" alt="" />
+<figcaption><strong>Figure 1.5.</strong> A stepped bar and its exact spring model. Segments may differ in length, area, and material; the nodes need not be evenly spaced.</figcaption>
+</figure>
+<p>A <em>stepped</em> bar — segments of different <span class="math inline">\(E_i\)</span>, <span class="math inline">\(A_i\)</span>, <span class="math inline">\(L_i\)</span> placed end to end, nodes wherever segments meet (Fig. <a href="01_springs_and_stiffness.html#fig:stepped">1.5</a>) — becomes a chain of springs with <span class="math inline">\(k_i = E_iA_i/L_i\)</span>. Non-uniform spacing costs nothing: each element brings its own length.</p>
+<h5 id="mini-example.">Mini-example.</h5>
+<p>Steel bar (<span class="math inline">\(E=200\,\)</span>GPa) in two segments: <span class="math inline">\(A_1 = 200\,\mathrm{mm}^2\)</span>, <span class="math inline">\(L_1=1\)</span> m and <span class="math inline">\(A_2=100\,\mathrm{mm}^2\)</span>, <span class="math inline">\(L_2=0.5\)</span> m; left end fixed, <span class="math inline">\(F=10\)</span> kN at the right end, no load at the middle node. Then <span class="math display">\[k_1 = \frac{200\cdot10^9 \cdot 200\cdot10^{-6}}{1} = 40\,\mathrm{MN/m},
+  \qquad
+  k_2 = \frac{200\cdot10^9 \cdot 100\cdot10^{-6}}{0.5} = 40\,\mathrm{MN/m},\]</span> so, reusing worked example A with <span class="math inline">\(k=40\)</span> MN/m: <span class="math inline">\(u_2 = F/k = 0.25\)</span> mm, <span class="math inline">\(u_3 = 0.50\)</span> mm, reaction <span class="math inline">\(-10\)</span> kN. Two different geometries, same stiffness — the kind of coincidence that keeps hand checks honest.</p>
+<h2 id="what-we-can-and-cannot-do-yet">1.8   What we can and cannot do yet</h2>
+<p>Take stock. We can model any series (and, with a little thought, parallel) arrangement of springs and uniform bars; assemble; apply any legal combination of prescribed forces and displacements; solve; recover reactions and internal member forces. A computer implementation is a loop over elements (assembly), a reordering (partitioning), and one call to a linear solver. This <em>is</em> the finite element method in its discrete-structure form, and Lecture 3 will take it to 2D trusses with no new concepts beyond geometry.</p>
+<p>But now ask: what if the load is not applied at discrete points, but distributed — a bar hanging under its own weight? What if the cross-section varies <em>continuously</em>, <span class="math inline">\(A(x)\)</span>? Where should the nodes go then, and what happens <em>between</em> them? Our spring model is silent: it has no “between”. The displacement is no longer a short list of numbers <span class="math inline">\(u_1,\dots,u_n\)</span> but a <em>function</em> <span class="math inline">\(u(x)\)</span> — one value at each of infinitely many points.</p>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>To handle functions we need to restate the whole problem as a <em>boundary value problem</em>: a <em>differential equation</em> with <em>boundary conditions</em>. That restatement, and the systematic art of feeding it back to a finite number of unknowns, is Lecture 2. The reward at the end: the element matrix <span class="math inline">\(\frac{EA}{L}\left[\begin{smallmatrix}1&amp;-1\\-1&amp;1\end{smallmatrix}\right]\)</span> will reappear — this time <em>derived</em>, not drawn — together with a recipe that works equally well for heat flow, and later for triangles in the plane where intuition alone cannot carry us.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="00_how_to_read.html">← How to Read These Notes</a> <a href="02_boundary_value_problem.html">Lecture 2 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>

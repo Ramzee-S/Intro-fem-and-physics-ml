@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mass, Damping, and Time — Essential Concepts in FEM &amp; Physics-Based ML</title>
+<meta name="author" content="Ramses Sala">
+<link rel="stylesheet" href="notes.css">
+<script>window.MathJax = { tex: { tags: 'none' }, chtml: { scale: 0.98 } };</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+<nav class="top"><a href="../../index.html">Course home</a> <a href="04_plane_elasticity_and_triangles.html">← Lecture 4</a> <a href="06_nonlinear_problems.html">Lecture 6 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<p class="kicker">Lecture 5</p>
+<h1>Mass, Damping, and Time</h1>
+<h2 id="what-statics-left-out">5.1   What statics left out</h2>
+<p>Every structure so far was at rest. We applied a load, asked where the nodes end up, and never asked how they get there. That was honest as long as loads are applied slowly. Apply them quickly — drop a weight, strike a bell, drive over a bridge — and a second property of the structure wakes up: it has <em>mass</em>, and mass resists being accelerated.</p>
+<p>The plan of this lecture copies Lecture 1 on purpose. We start with springs and point masses, where everything can be seen and computed by hand, move quickly to several degrees of freedom, and only at the end replace the springs by bars with <span class="math inline">\(E\)</span>, <span class="math inline">\(A\)</span>, <span class="math inline">\(L\)</span> and a density <span class="math inline">\(\rho\)</span>. Three new characters appear — the mass <span class="math inline">\(m\)</span>, the damper <span class="math inline">\(c\)</span>, and the time <span class="math inline">\(t\)</span> — and one old one stays exactly as it was: the stiffness matrix <span class="math inline">\(\mathbf{K}\)</span>, assembled as in Lecture 1.</p>
+<h2 id="one-mass-on-one-spring">5.2   One mass on one spring</h2>
+<p>Attach a point mass <span class="math inline">\(m\)</span> to the spring of Fig. <a href="01_springs_and_stiffness.html#fig:onespring">1.1</a>. Newton’s second law for the mass: the applied force minus the spring force equals mass times acceleration, <span id="eq:sdof"></span><span class="math display">\[m\,\ddot u + k\,u = f(t), \qquad \ddot u = \frac{\mathrm{d}^2 u}{\mathrm{d}t^2}.
+  
+\tag{5.1}\]</span> Read it as statics with one more force: <span class="math inline">\(k u = f - m\ddot u\)</span>. The <em>inertia force</em> <span class="math inline">\(-m\ddot u\)</span> acts like an extra load, opposing acceleration. Set <span class="math inline">\(\ddot u = 0\)</span> and Lecture 1 is back.</p>
+<p>Pull the mass aside to <span class="math inline">\(u_0\)</span> and let go, with no load. Try <span class="math inline">\(u(t) = u_0\cos\omega t\)</span> in <a href="05_mass_damping_and_time.html#eq:sdof">(5.1)</a>: it fits if and only if <span id="eq:omega"></span><span class="math display">\[\omega = \sqrt{\frac{k}{m}} ,
+  
+\tag{5.2}\]</span> the <em>natural (circular) frequency</em>, in radians per second; the period of one oscillation is <span class="math inline">\(T = 2\pi/\omega\)</span>. A stiff spring or a light mass vibrates fast, a soft spring or a heavy mass slowly — and the structure chooses this frequency itself, whatever we do to start it. During the motion, energy is handed back and forth: all strain energy <span class="math inline">\(\tfrac12 k u^2\)</span> at the turning points, all kinetic energy <span class="math inline">\(\tfrac12 m\dot u^2\)</span> when passing through <span class="math inline">\(u = 0\)</span>, and the sum constant.</p>
+<h2 id="damping">5.3   Damping</h2>
+<p>Real oscillations die out. The simplest model is a <em>dashpot</em> parallel to the spring (Fig. <a href="05_mass_damping_and_time.html#fig:msd">5.1</a>), which resists velocity: <span id="eq:msd"></span><span class="math display">\[m\,\ddot u + c\,\dot u + k\,u = f(t).
+  
+\tag{5.3}\]</span></p>
+<figure id="fig:msd">
+<img src="figs/05_fig1.svg" style="width:662px" alt="" />
+<figcaption><strong>Figure 5.1.</strong> Left: mass, spring, and dashpot. Right: free motion after release from <span class="math inline">\(u_0\)</span>, without damping, lightly damped, and critically damped.</figcaption>
+</figure>
+<p>One number tells the whole story, the <em>damping ratio</em> <span class="math display">\[\zeta = \frac{c}{2\sqrt{k\,m}} .\]</span> For <span class="math inline">\(\zeta &lt; 1\)</span> the mass still oscillates, with an amplitude shrinking like <span class="math inline">\(e^{-\zeta\omega t}\)</span> and a slightly lower frequency <span class="math inline">\(\omega_d = \omega\sqrt{1-\zeta^2}\)</span>. For <span class="math inline">\(\zeta \ge 1\)</span> it creeps back without crossing zero; <span class="math inline">\(\zeta = 1\)</span>, <em>critical damping</em>, is the fastest return without overshoot (door closers and measuring instruments aim for it). Structures are lightly damped: steel and concrete constructions typically have <span class="math inline">\(\zeta\)</span> of a few percent, so <span class="math inline">\(\omega_d\)</span> and <span class="math inline">\(\omega\)</span> are practically equal — but the few percent decide how long a vibration lasts and how violent a resonance becomes. And after the motion has died out, what remains is <span class="math inline">\(k u = f\)</span>: <em>statics is where a damped structure ends up.</em></p>
+<h2 id="sec:mdof">5.4   Several masses: the equations of motion</h2>
+<p>Now the step that matters. Take the two-spring chain of Section <a href="01_springs_and_stiffness.html#sec:twosprings">1.3</a>, fix node 1, and put a point mass on each free node (Fig. <a href="05_mass_damping_and_time.html#fig:twomass">5.2</a>). Write Newton’s law for each mass; the spring forces are exactly those of Lecture 1: <span class="math display">\[\begin{aligned}
+  m_1\ddot u_1 + k_1 u_1 + k_2(u_1 - u_2) &amp;= f_1,\\
+  m_2\ddot u_2 + k_2(u_2 - u_1) &amp;= f_2 .
+\end{aligned}\]</span></p>
+<figure id="fig:twomass">
+<img src="figs/05_fig2.svg" style="width:422px" alt="" />
+<figcaption><strong>Figure 5.2.</strong> Two masses on a chain of two springs. (The fixed node is no longer numbered: <span class="math inline">\(u_1\)</span>, <span class="math inline">\(u_2\)</span> are the two free degrees of freedom.)</figcaption>
+</figure>
+<p>In matrix form, <span id="eq:eom"></span><span class="math display">\[\underbrace{\begin{bmatrix} m_1 &amp; 0\\ 0 &amp; m_2\end{bmatrix}}_{\textstyle\mathbf{M}}
+  \begin{bmatrix}\ddot u_1\\ \ddot u_2\end{bmatrix}
+  +
+  \underbrace{\begin{bmatrix} k_1+k_2 &amp; -k_2\\ -k_2 &amp; k_2\end{bmatrix}}_{\textstyle\mathbf{K}}
+  \begin{bmatrix} u_1\\ u_2\end{bmatrix}
+  =
+  \begin{bmatrix} f_1\\ f_2\end{bmatrix},
+  \qquad
+  \boxed{\;\mathbf{M}\,\ddot{\mathbf{u}} + \mathbf{C}\,\dot{\mathbf{u}} + \mathbf{K}\,\mathbf{u} = \mathbf{f}(t)\;}
+  
+\tag{5.5}\]</span> where the boxed form includes damping and holds for any number of degrees of freedom. Take stock of how little is new:</p>
+<ul>
+<li><p><span class="math inline">\(\mathbf{K}\)</span> is the stiffness matrix of Lecture 1, assembled as always (rows and columns of fixed nodes already removed). Dynamics does not touch it.</p></li>
+<li><p><span class="math inline">\(\mathbf{M}\)</span> is the <em>mass matrix</em>. With point masses sitting on the nodes it is <em>diagonal</em>: node <span class="math inline">\(i\)</span> contributes <span class="math inline">\(m_i\)</span> to entry <span class="math inline">\(M_{ii}\)</span> and nothing else. Assembly could not be simpler — and a diagonal matrix is inverted by dividing. We will use diagonal mass matrices throughout; Section <a href="05_mass_damping_and_time.html#sec:barmass">5.8</a> explains what that means for bars, and what the alternative is.</p></li>
+<li><p><span class="math inline">\(\mathbf{C}\)</span> collects the dashpots. A dashpot between two nodes produces <span class="math inline">\(c\left[\begin{smallmatrix}1&amp;-1\\-1&amp;1\end{smallmatrix}\right]\)</span> and is assembled exactly like a spring, with velocities in place of displacements.</p></li>
+<li><p>Boundary conditions are those of Lecture 1, now holding at every instant. In addition, time needs a start: the <em>initial conditions</em> <span class="math inline">\(\mathbf{u}(0)\)</span> and <span class="math inline">\(\dot{\mathbf{u}}(0)\)</span>, two per degree of freedom, because the equation is second order in time.</p></li>
+</ul>
+<h2 id="sec:modes">5.5   Natural frequencies and modes</h2>
+<p>How does this system vibrate when left alone (<span class="math inline">\(\mathbf{f} = \mathbf{0}\)</span>, no damping)? Ask for the simplest conceivable motion: all nodes moving in step, with one frequency and a fixed shape <span class="math inline">\(\boldsymbol{\phi}\)</span>, <span class="math display">\[\mathbf{u}(t) = \boldsymbol{\phi}\,\cos\omega t .\]</span> Insert into <span class="math inline">\(\mathbf{M}\ddot{\mathbf{u}} + \mathbf{K}\mathbf{u} = \mathbf{0}\)</span>; since <span class="math inline">\(\ddot{\mathbf{u}} = -\omega^2\boldsymbol{\phi}\cos\omega t\)</span>, the cosine cancels and <span id="eq:eig"></span><span class="math display">\[\bigl(\mathbf{K} - \omega^2\mathbf{M}\bigr)\,\boldsymbol{\phi }= \mathbf{0} .
+  
+\tag{5.6}\]</span> This is an <em>eigenvalue problem</em>. A nonzero shape <span class="math inline">\(\boldsymbol{\phi}\)</span> exists only if the matrix in brackets is singular, that is, only for special values of <span class="math inline">\(\omega\)</span>: the natural frequencies. Each comes with its shape, the <em>mode</em>.</p>
+<h5 id="by-hand.">By hand.</h5>
+<p>Let <span class="math inline">\(k_1 = k_2 = k\)</span> and <span class="math inline">\(m_1 = m_2 = m\)</span>, and write <span class="math inline">\(\lambda = \omega^2 m/k\)</span>. The determinant of <span class="math inline">\(\mathbf{K} - \omega^2\mathbf{M}\)</span> must vanish: <span class="math display">\[\det\begin{bmatrix} 2-\lambda &amp; -1\\ -1 &amp; 1-\lambda\end{bmatrix}
+  = \lambda^2 - 3\lambda + 1 = 0
+  \quad\Longrightarrow\quad
+  \lambda_{1,2} = \frac{3\mp\sqrt5}{2} = 0.382,\ \ 2.618 ,\]</span> <span class="math display">\[\omega_1 = 0.618\sqrt{\frac km}, \qquad \omega_2 = 1.618\sqrt{\frac km} .\]</span> The second row of <a href="05_mass_damping_and_time.html#eq:eig">(5.6)</a> then gives each shape, <span class="math inline">\(\phi_1 = (1-\lambda)\,\phi_2\)</span>: <span class="math display">\[\boldsymbol{\phi}^{(1)} = \begin{bmatrix} 0.618\\ 1\end{bmatrix},
+  \qquad
+  \boldsymbol{\phi}^{(2)} = \begin{bmatrix} -1.618\\ 1\end{bmatrix}.\]</span> In the first mode both masses swing the same way, the outer one further — the chain sways as a whole, slowly. In the second they swing against each other, the spring between the masses works hard, and the frequency is <span class="math inline">\(2.6\)</span> times higher (Fig. <a href="05_mass_damping_and_time.html#fig:modes">5.3</a>). A mode is determined only up to a factor: it is a shape, not an amplitude.</p>
+<figure id="fig:modes">
+<img src="figs/05_fig3.svg" style="width:527px" alt="" />
+<figcaption><strong>Figure 5.3.</strong> The two modes of the two-mass chain (grey: rest position). Mode 1: in step. Mode 2: against each other.</figcaption>
+</figure>
+<p>A system with <span class="math inline">\(n\)</span> degrees of freedom has <span class="math inline">\(n\)</span> natural frequencies and <span class="math inline">\(n\)</span> modes. For anything larger than <span class="math inline">\(2\times2\)</span> nobody expands determinants; eigenvalue solvers are standard library routines.</p>
+<h2 id="why-modes-matter-they-decouple-the-system">5.6   Why modes matter: they decouple the system</h2>
+<p>Check one property of the two shapes just found: <span class="math display">\[\boldsymbol{\phi}^{(1)\mathsf T}\mathbf{M}\,\boldsymbol{\phi}^{(2)}
+  = m\,(0.618\cdot(-1.618) + 1\cdot 1) = 0 .\]</span> The modes are <em>orthogonal</em> with respect to <span class="math inline">\(\mathbf{M}\)</span>, and likewise with respect to <span class="math inline">\(\mathbf{K}\)</span>. This is no accident of the example; for distinct frequencies it follows from the symmetry of <span class="math inline">\(\mathbf{K}\)</span> and <span class="math inline">\(\mathbf{M}\)</span> — the symmetry that Lecture 1 traced back to energy.</p>
+<p>The consequence is the central idea of structural dynamics. Any motion can be written as a mixture of the modes, with time-dependent amounts <span class="math inline">\(q_i(t)\)</span>: <span class="math display">\[\mathbf{u}(t) = q_1(t)\,\boldsymbol{\phi}^{(1)} + q_2(t)\,\boldsymbol{\phi}^{(2)} .\]</span> Insert this into the undamped equation <span class="math inline">\(\mathbf{M}\ddot{\mathbf{u}} + \mathbf{K}\mathbf{u}
+= \mathbf{f}(t)\)</span> and multiply from the left by <span class="math inline">\(\boldsymbol{\phi}^{(i)\mathsf T}\)</span>. Orthogonality removes every mixed term. What remains of the stiffness term follows from <a href="05_mass_damping_and_time.html#eq:eig">(5.6)</a>: <span class="math inline">\(\boldsymbol{\phi}^{(i)\mathsf T}\mathbf{K}\,\boldsymbol{\phi}^{(i)} =
+\omega_i^2\,\boldsymbol{\phi}^{(i)\mathsf T}\mathbf{M}\,\boldsymbol{\phi}^{(i)}\)</span>. Divide by <span class="math inline">\(\boldsymbol{\phi}^{(i)\mathsf T}\mathbf{M}\,\boldsymbol{\phi}^{(i)}\)</span>, and what is left is, for each mode separately, <span id="eq:modal"></span><span class="math display">\[\ddot q_i + \omega_i^2\, q_i = \frac{\boldsymbol{\phi}^{(i)\mathsf T}\mathbf{f}(t)}{\boldsymbol{\phi}^{(i)\mathsf T}\mathbf{M}\,\boldsymbol{\phi}^{(i)}} .
+  
+\tag{5.7}\]</span></p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>Modes decouple.</strong> Seen in its modes, a structure with <span class="math inline">\(n\)</span> coupled degrees of freedom is <span class="math inline">\(n\)</span> <em>independent</em> single-mass oscillators, each with its own frequency <span class="math inline">\(\omega_i\)</span> and its own share of the load. Everything about one mass on one spring — natural frequency, damping ratio, resonance — therefore applies to every structure, mode by mode.</p>
+</div>
+<p>Two practical readings. A load whose frequency comes close to some <span class="math inline">\(\omega_i\)</span> drives that mode into resonance, so the first question of any dynamic design is: <em>where are the natural frequencies, and where are the loads?</em> And since slow loads hardly excite the fast modes, the response of a large model can often be described by a handful of the lowest modes — a first glimpse of model reduction, the subject of Lecture D.</p>
+<h5 id="damping-in-several-degrees-of-freedom.">Damping in several degrees of freedom.</h5>
+<p>A general <span class="math inline">\(\mathbf{C}\)</span> couples the modal equations again. A popular way to keep them apart is <em>Rayleigh damping</em>, <span class="math inline">\(\mathbf{C} = \alpha\,\mathbf{M} + \beta\,\mathbf{K}\)</span>: each mode then simply acquires the damping ratio <span class="math inline">\(\zeta_i = \alpha/(2\omega_i) + \beta\,\omega_i/2\)</span>. The two constants are chosen to give reasonable damping at two frequencies of interest. It is a modelling convenience rather than physics, and worth knowing as such.</p>
+<h2 id="sec:timestep">5.7   Stepping through time</h2>
+<p>Modes answer questions about free vibration and steady excitation. For a general load history — and for everything nonlinear in Lecture 6 — we compute the motion directly, step by step. Divide time into steps <span class="math inline">\(\Delta t\)</span>, write <span class="math inline">\(\mathbf{u}^n\)</span> for the displacement at <span class="math inline">\(t_n = n\,\Delta t\)</span>, and replace the acceleration by the <em>central difference</em> <span class="math display">\[\ddot{\mathbf{u}}(t_n) \approx \frac{\mathbf{u}^{n+1} - 2\,\mathbf{u}^{n} + \mathbf{u}^{n-1}}{\Delta t^2}.\]</span> Insert into <span class="math inline">\(\mathbf{M}\ddot{\mathbf{u}} + \mathbf{K}\mathbf{u} = \mathbf{f}\)</span> at time <span class="math inline">\(t_n\)</span> and solve for the new displacement: <span id="eq:cd"></span><span class="math display">\[\mathbf{u}^{n+1} = 2\,\mathbf{u}^n - \mathbf{u}^{n-1}
+     + \Delta t^2\,\mathbf{M}^{-1}\bigl(\mathbf{f}^n - \mathbf{K}\,\mathbf{u}^n\bigr).
+  
+\tag{5.8}\]</span> Everything on the right is known: the method is <em>explicit</em>. And here the diagonal mass matrix pays its rent: <span class="math inline">\(\mathbf{M}^{-1}\)</span> is a division per node, so a time step requires <em>no solution of equations at all</em> — only the force imbalance <span class="math inline">\(\mathbf{f} - \mathbf{K}\mathbf{u}\)</span> of each node, divided by its mass. (To start, <span class="math inline">\(\mathbf{u}^{-1}\)</span> is obtained from the initial conditions: <span class="math inline">\(\mathbf{u}^{-1} = \mathbf{u}^0 - \Delta t\,\dot{\mathbf{u}}^0 +
+\tfrac12\Delta t^2\,\ddot{\mathbf{u}}^0\)</span>, with <span class="math inline">\(\ddot{\mathbf{u}}^0\)</span> from the equation of motion at <span class="math inline">\(t=0\)</span>.)</p>
+<h5 id="by-hand.-1">By hand.</h5>
+<p>One mass, <span class="math inline">\(\omega = 1\)</span>, released from <span class="math inline">\(u^0 = 1\)</span> at rest; exact solution <span class="math inline">\(\cos t\)</span>. Then <a href="05_mass_damping_and_time.html#eq:cd">(5.8)</a> reads <span class="math inline">\(u^{n+1} = (2 - \Delta t^2)\,u^n - u^{n-1}\)</span>. With <span class="math inline">\(\Delta t = 0.5\)</span>: <span class="math display">\[\begin{array}{c|ccccc}
+t &amp; 0 &amp; 0.5 &amp; 1.0 &amp; 1.5 &amp; 2.0\\\hline
+u^n &amp; 1 &amp; 0.8750 &amp; 0.5313 &amp; 0.0547 &amp; -0.4355\\
+\cos t &amp; 1 &amp; 0.8776 &amp; 0.5403 &amp; 0.0707 &amp; -0.4161
+\end{array}\]</span> A few percent off with only twelve steps per period. Now be greedy and take <span class="math inline">\(\Delta t = 2.5\)</span>: <span class="math display">\[\begin{array}{c|ccccc}
+t &amp; 0 &amp; 2.5 &amp; 5.0 &amp; 7.5 &amp; 10.0\\\hline
+u^n &amp; 1 &amp; -2.125 &amp; 8.03 &amp; -32.0 &amp; 128.0
+\end{array}\]</span> The numbers do not become inaccurate; they explode, by a factor of four per step. The recurrence shows why: its multiplier <span class="math inline">\(2-\omega^2\Delta t^2\)</span> must stay between <span class="math inline">\(-2\)</span> and <span class="math inline">\(2\)</span> for the solution to remain bounded.</p>
+<div class="keyidea">
+<div class="boxtitle">
+<p>Key idea</p>
+</div>
+<p><strong>The explicit method is only conditionally stable:</strong> <span class="math display">\[\Delta t \le \frac{2}{\omega_{\max}} ,\]</span> with <span class="math inline">\(\omega_{\max}\)</span> the <em>highest</em> natural frequency of the model — whether or not that mode matters for the answer. Beyond the limit the computation blows up. For the two-mass chain: <span class="math inline">\(\Delta t \le 2/1.618 = 1.24\sqrt{m/k}\)</span>.</p>
+</div>
+<h5 id="the-alternative-implicit-methods.">The alternative: implicit methods.</h5>
+<p>Evaluate the equation of motion at the <em>new</em> time instead, and <span class="math inline">\(\mathbf{u}^{n+1}\)</span> appears on both sides; each step then requires solving a linear system with a matrix of the form <span class="math inline">\(\mathbf{M} + \tfrac14\Delta t^2\,\mathbf{K}\)</span> (the <em>average acceleration</em> or trapezoidal rule, a member of the Newmark family). The reward is unconditional stability: the step size is chosen for accuracy alone. The trade is clear and governs practice: explicit methods take very many very cheap steps and suit short, violent events such as impact and crash; implicit methods take few expensive steps and suit slow structural vibration.</p>
+<h2 id="sec:barmass">5.8   From springs to bars: where is the mass?</h2>
+<p>As in Section <a href="01_springs_and_stiffness.html#sec:bars">1.7</a>, replace the springs by bar elements of length <span class="math inline">\(h\)</span> with <span class="math inline">\(k = EA/h\)</span>. A bar’s mass <span class="math inline">\(\rho A h\)</span> is spread along its length, not concentrated in points. The simplest answer, and the one we adopt: <em>give half of each element’s mass to each of its nodes</em>, <span id="eq:lumped"></span><span class="math display">\[\mathbf{m}^e_{\text{lumped}} = \frac{\rho A h}{2}\begin{bmatrix}1&amp;0\\0&amp;1\end{bmatrix}.
+  
+\tag{5.9}\]</span> The bar becomes a chain of point masses and springs (Fig. <a href="05_mass_damping_and_time.html#fig:lumping">5.4</a>), <span class="math inline">\(\mathbf{M}\)</span> stays diagonal, and everything above applies unchanged.</p>
+<figure id="fig:lumping">
+<img src="figs/05_fig4.svg" style="width:328px" alt="" />
+<figcaption><strong>Figure 5.4.</strong> Lumping: each element hands half of its mass to each of its nodes. Interior nodes collect two halves, the end node one.</figcaption>
+</figure>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>Not the only way.</strong> Apply the recipe of Lecture 2 to the inertia term — weight with the shape functions and integrate — and the result is the <em>consistent</em> mass matrix <span class="math inline">\(\mathbf{m}^e = \int_0^h \mathbf{N}^{\mathsf{T}}\rho A\,\mathbf{N}\,\mathrm{d}\xi =
+\frac{\rho A h}{6}\left[\begin{smallmatrix}2&amp;1\\1&amp;2\end{smallmatrix}\right]\)</span>, which is not diagonal. It is the mathematically natural choice and often somewhat more accurate; adding up each of its rows gives back the lumped matrix. We use lumped masses because a diagonal <span class="math inline">\(\mathbf{M}\)</span> makes life easy — no equations to solve in explicit time stepping — and because that is what a large part of engineering practice does for the same reason.</p>
+</div>
+<h5 id="how-good-is-it-a-test-by-hand.">How good is it? A test by hand.</h5>
+<p>A bar fixed at one end, free at the other. The exact lowest natural frequency is <span class="math inline">\(\omega_1 = \tfrac{\pi}{2}\,c/L = 1.571\,c/L\)</span>, where <span class="math inline">\(c = \sqrt{E/\rho}\)</span> is the speed at which waves travel along the bar.</p>
+<p><em>One element.</em> One spring <span class="math inline">\(EA/L\)</span>, one mass <span class="math inline">\(\tfrac12\rho A L\)</span> at the tip: <span class="math inline">\(\omega = \sqrt{k/m} = \sqrt2\,c/L = 1.414\,c/L\)</span>, ten percent low.</p>
+<p><em>Two elements</em>, <span class="math inline">\(h = L/2\)</span>: stiffness <span class="math inline">\(\frac{EA}{h}\left[\begin{smallmatrix}2&amp;-1\\-1&amp;1\end{smallmatrix}\right]\)</span>, masses <span class="math inline">\(\rho A h\)</span> and <span class="math inline">\(\tfrac12\rho A h\)</span>. With <span class="math inline">\(\lambda = \omega^2\rho h^2/E\)</span>, <span class="math display">\[\det\begin{bmatrix}2-\lambda &amp; -1\\ -1 &amp; 1-\tfrac{\lambda}{2}\end{bmatrix}
+  = \tfrac12\lambda^2 - 2\lambda + 1 = 0
+  \quad\Longrightarrow\quad \lambda = 2\mp\sqrt2 ,\]</span> so <span class="math inline">\(\omega_1 = \sqrt{0.586}\;c/h = 1.531\,c/L\)</span>: now <span class="math inline">\(2.6\)</span> percent low. The pattern continues:</p>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">elements</th>
+<th style="text-align: center;">1</th>
+<th style="text-align: center;">2</th>
+<th style="text-align: center;">3</th>
+<th style="text-align: center;">exact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(\omega_1 L/c\)</span>, lumped mass</td>
+<td style="text-align: center;">1.414</td>
+<td style="text-align: center;">1.531</td>
+<td style="text-align: center;">1.553</td>
+<td style="text-align: center;">1.571</td>
+</tr>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(\omega_1 L/c\)</span>, consistent mass</td>
+<td style="text-align: center;">1.732</td>
+<td style="text-align: center;">1.611</td>
+<td style="text-align: center;">1.589</td>
+<td style="text-align: center;">1.571</td>
+</tr>
+<tr>
+<td style="text-align: center;"><span class="math inline">\(\omega_2 L/c\)</span>, lumped mass</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">3.696</td>
+<td style="text-align: center;">4.243</td>
+<td style="text-align: center;">4.712</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Three things to read off. The lowest frequency converges quickly. Lumped masses approach it from below, consistent masses from above. And the <em>highest</em> modes of any mesh are poor — the second frequency of the two-element model is 22 percent off — because a mode needs several elements per wave to be represented. Trust the lower part of the spectrum only.</p>
+<h5 id="the-time-step-read-physically.">The time step, read physically.</h5>
+<p>For a chain of lumped bar elements the highest frequency never exceeds <span class="math inline">\(2c/h\)</span>, so the stability limit of Section <a href="05_mass_damping_and_time.html#sec:timestep">5.7</a> becomes <span class="math display">\[\Delta t \le \frac{h}{c} :\]</span> <em>the time step must be shorter than the time a wave needs to cross one element.</em> This explains the price of fine meshes in explicit analysis: halving <span class="math inline">\(h\)</span> doubles the number of elements <em>and</em> halves the permitted step. For steel, <span class="math inline">\(c \approx 5000\)</span> m/s; elements of 5 mm allow steps of a microsecond.</p>
+<h2 id="worked-example-a-load-applied-suddenly">5.9   Worked example: a load applied suddenly</h2>
+<p>A bar fixed at the left end, three elements, lumped masses, in units where <span class="math inline">\(EA = \rho A = L = 1\)</span> (so <span class="math inline">\(c = 1\)</span>). At <span class="math inline">\(t = 0\)</span> a force <span class="math inline">\(F = 1\)</span> is switched on at the free end and held. Statics says the tip moves to <span class="math inline">\(FL/EA = 1\)</span>. Explicit time stepping with <span class="math inline">\(\Delta t = 0.25\)</span> (the limit is <span class="math inline">\(0.345\)</span>) gives Fig. <a href="05_mass_damping_and_time.html#fig:step">5.5</a>.</p>
+<figure id="fig:step">
+<img src="figs/05_fig5.svg" style="width:738px" alt="" />
+<figcaption><strong>Figure 5.5.</strong> Tip displacement of a three-element bar after a suddenly applied end force. Without damping the tip swings up to almost twice the static value, again and again; with damping it settles on the static solution.</figcaption>
+</figure>
+<p>The tip does not stop at the static value: it arrives there with velocity, overshoots to about <span class="math inline">\(1.9\)</span> — the highest peak in the plot is <span class="math inline">\(1.94\)</span>; the continuous bar reaches exactly <span class="math inline">\(2\)</span> — and swings back, with the period <span class="math inline">\(4L/c\)</span> of the lowest mode. A load applied suddenly produces up to <em>twice</em> the displacement, and therefore twice the stress, of the same load applied slowly. That factor of two is the first thing dynamics teaches a designer. With damping (here mass-proportional, <span class="math inline">\(\mathbf{C} = 0.8\,\mathbf{M}\)</span>) the oscillation decays and the tip settles at <span class="math inline">\(1\)</span>: the static solution of Lecture 1, reached at last. (This damping is heavy: a damping ratio of about <span class="math inline">\(0.26\)</span> in the lowest mode, far above the few percent of real structures. How <span class="math inline">\(\mathbf{C}\)</span> enters the time step is shown in Exercise 5.) And taking <span class="math inline">\(\Delta t = 0.36\)</span>, just beyond the limit, produces tip displacements of <span class="math inline">\(3\)</span>, <span class="math inline">\(-2\)</span>, <span class="math inline">\(7\)</span>, … within a dozen steps — the instability announces itself without subtlety.</p>
+<div class="sidenote">
+<div class="boxtitle">
+<p>Remark</p>
+</div>
+<p><strong>First order in time.</strong> Transient heat conduction — the rod of Exercise 2 warming up — has the same structure with one time derivative less: <span class="math inline">\(\mathbf{C}_{\!h}\dot{\mathbf{T}} + \mathbf{K}\,\mathbf{T} = \mathbf{f}\)</span>, with a heat capacity matrix in place of the mass matrix, lumped in the same way. Temperatures do not oscillate; they relax toward the steady state. The stepping methods carry over, including the distinction between explicit (conditionally stable) and implicit (unconditionally stable).</p>
+</div>
+<h2 id="what-changed-and-what-did-not">5.10   What changed, and what did not</h2>
+<div class="center">
+<table>
+<thead>
+<tr>
+<th style="text-align: left;"><strong>statics</strong></th>
+<th style="text-align: left;"><strong>dynamics (this lecture)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><span class="math inline">\(\mathbf{K}\mathbf{u} = \mathbf{f}\)</span></td>
+<td style="text-align: left;"><span class="math inline">\(\mathbf{M}\ddot{\mathbf{u}} + \mathbf{C}\dot{\mathbf{u}} + \mathbf{K}\mathbf{u} = \mathbf{f}(t)\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">stiffness matrix <span class="math inline">\(\mathbf{K}\)</span></td>
+<td style="text-align: left;">the same <span class="math inline">\(\mathbf{K}\)</span>, plus mass <span class="math inline">\(\mathbf{M}\)</span> and damping <span class="math inline">\(\mathbf{C}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">boundary conditions</td>
+<td style="text-align: left;">boundary conditions <em>and</em> initial conditions</td>
+</tr>
+<tr>
+<td style="text-align: left;">one linear solve</td>
+<td style="text-align: left;">eigenvalue problem (modes), or many time steps</td>
+</tr>
+<tr>
+<td style="text-align: left;">rigid body mode: <span class="math inline">\(\mathbf{K}\)</span> singular</td>
+<td style="text-align: left;">rigid body mode: a mode with <span class="math inline">\(\omega = 0\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">mesh fine enough for the stress field</td>
+<td style="text-align: left;">also fine enough for the shortest wave of interest</td>
+</tr>
+<tr>
+<td style="text-align: left;">load cases reuse the factorized <span class="math inline">\(\mathbf{K}\)</span></td>
+<td style="text-align: left;">explicit steps need no factorization at all</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="exercisebox">
+<div class="boxtitle">
+<p>Companion exercise: Exercise 5</p>
+</div>
+<p>Notebook <code>Exercise_5_Dynamics.ipynb</code> : you write a small explicit dynamics code — assembly of a chain with a diagonal mass matrix, natural frequencies and modes, a central-difference time stepper — and use it to reproduce the hand computations of this lecture, find the stability limit by experiment, watch a wave front travel along a bar, and measure how many modes a response really needs.</p>
+</div>
+<div class="ahead">
+<div class="boxtitle">
+<p>Looking ahead</p>
+</div>
+<p>One assumption survived this whole lecture untouched: <span class="math inline">\(\mathbf{K}\)</span> is a constant matrix. Displacements were small, the material obeyed Hooke’s law, and nothing came into contact with anything. Lecture 6 gives up that assumption — and the stepping idea of this lecture, advancing in small increments and solving something simple in each, turns out to be exactly the right preparation.</p>
+</div>
+
+<nav class="bottom"><a href="../../index.html">Course home</a> <a href="04_plane_elasticity_and_triangles.html">← Lecture 4</a> <a href="06_nonlinear_problems.html">Lecture 6 →</a> <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a></nav>
+<footer>
+<p>Copyright © 2025 Ramses Sala. Part of the lecture notes <em>Essential Concepts in FEM &amp; Physics-Based ML</em>;
+the <a href="../Essential_Concepts_FEM_and_Physics_Based_ML_Lecture_Notes.pdf">PDF</a> is the reference version. All rights reserved; free to read and to use for your own study — see the <a href="https://github.com/Ramzee-S/Intro-fem-and-physics-ml/blob/main/LICENSE.md">terms of use</a>.
+Created with extensive use of AI (Claude Code, Anthropic); see <a href="../../index.html#about">About these notes</a>.</p>
+</footer>
+</main>
+</body>
+</html>
